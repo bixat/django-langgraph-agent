@@ -1,0 +1,344 @@
+Metadata-Version: 2.4
+Name: django-langgraph-agent
+Version: 0.1.0
+Summary: A reusable Django package for building streaming AI agents with LangGraph and OpenRouter
+Author: Tathbeet Team
+License: MIT
+Project-URL: Homepage, https://github.com/tathbeet/django-langgraph-agent
+Project-URL: Documentation, https://github.com/tathbeet/django-langgraph-agent#readme
+Project-URL: Repository, https://github.com/tathbeet/django-langgraph-agent
+Project-URL: Issues, https://github.com/tathbeet/django-langgraph-agent/issues
+Keywords: django,ai,agent,langgraph,llm,openrouter,streaming,sse
+Classifier: Development Status :: 3 - Alpha
+Classifier: Environment :: Web Environment
+Classifier: Framework :: Django
+Classifier: Framework :: Django :: 4.2
+Classifier: Framework :: Django :: 5.0
+Classifier: Intended Audience :: Developers
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Programming Language :: Python :: 3.10
+Classifier: Programming Language :: Python :: 3.11
+Classifier: Programming Language :: Python :: 3.12
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+Requires-Dist: django>=4.2
+Requires-Dist: langchain-core>=0.3
+Requires-Dist: langchain-openai>=0.2
+Requires-Dist: langgraph>=0.2
+Requires-Dist: openai>=1.0
+Provides-Extra: postgres
+Requires-Dist: psycopg[binary]>=3.1; extra == "postgres"
+Requires-Dist: psycopg-pool>=3.1; extra == "postgres"
+Provides-Extra: test
+Requires-Dist: pytest>=8.0; extra == "test"
+Requires-Dist: pytest-django>=4.8; extra == "test"
+Requires-Dist: pytest-mock>=3.12; extra == "test"
+Provides-Extra: dev
+Requires-Dist: django-langgraph-agent[postgres,test]; extra == "dev"
+Requires-Dist: black; extra == "dev"
+Requires-Dist: ruff; extra == "dev"
+
+# django-langgraph-agent
+
+A reusable Django package for building **streaming AI agents** powered by [LangGraph](https://github.com/langchain-ai/langgraph) and [OpenRouter](https://openrouter.ai).
+
+Battle-tested in production at [Tathbeet](https://tathbeet.space) — a Quran memorization platform serving thousands of users.
+
+---
+
+## Features
+
+- ✅ **Streaming SSE** — `token` / `tool_approval` / `done` / `error` events
+- ✅ **Human-in-the-Loop** — pause agent on write operations, resume after user approves/denies
+- ✅ **Auto Conversation Summarization** — compresses history to stay within token limits
+- ✅ **Multi-Model Fallback** — primary → fallback chain, resilient to rate limits
+- ✅ **Auto-Detecting Checkpointer** — PostgreSQL (NullPool) / SQLite / MemorySaver
+- ✅ **Gemini-Safe Message Sanitization** — auto-fixes broken turn sequences
+- ✅ **Built-in Django ORM Tools** — generic CRUD with model whitelist + field security
+- ✅ **10-line integration** — `DjangoAgent` + `stream_agent()` is all you need
+
+---
+
+## Installation
+
+```bash
+pip install django-langgraph-agent
+
+# Optional: PostgreSQL checkpointer support
+pip install django-langgraph-agent[postgres]
+```
+
+---
+
+## Quick Start
+
+### 1. Add to `INSTALLED_APPS`
+
+```python
+INSTALLED_APPS = [
+    ...
+    "django_ai_agent",
+]
+```
+
+### 2. Configure in `settings.py`
+
+```python
+DJANGO_AI_AGENT = {
+    "OPENROUTER_API_KEY": env("OPENROUTER_API_KEY"),
+
+    # LLM models (OpenRouter model IDs)
+    "DEFAULT_MODEL": "google/gemini-2.5-flash-preview",
+    "FALLBACK_MODELS": ["google/gemini-2.5-flash", "deepseek/deepseek-chat"],
+    "SUMMARIZER_MODEL": "deepseek/deepseek-chat",
+    "MAX_TOKENS": 800,
+    "SUMMARY_THRESHOLD": 4,
+
+    # Site identity (sent to OpenRouter as headers)
+    "SITE_URL": "https://myapp.com",
+    "SITE_TITLE": "My App AI",
+
+    # Tools requiring user approval before execution
+    "APPROVAL_REQUIRED_TOOLS": ["add_record", "update_record"],
+}
+```
+
+### 3. Create an agent
+
+```python
+# myapp/agents.py
+from django_ai_agent import DjangoAgent
+from langchain_core.tools import tool
+
+@tool
+def get_product_count() -> str:
+    """Returns the total number of active products."""
+    from myapp.models import Product
+    count = Product.objects.filter(is_active=True).count()
+    return f"There are {count} active products."
+
+my_agent = DjangoAgent(
+    name="support",
+    system_prompt="You are a helpful support agent for My App.",
+    tools=[get_product_count],
+)
+```
+
+### 4. Add a view
+
+```python
+# myapp/views.py
+from django.http import StreamingHttpResponse
+from django_ai_agent import stream_agent
+from myapp.agents import my_agent
+
+def chat_view(request):
+    gen = stream_agent(
+        agent=my_agent,
+        message=request.POST["message"],
+        thread_id=request.POST["thread_id"],
+        user_id=request.user.id,
+    )
+    return StreamingHttpResponse(gen, content_type="text/event-stream")
+```
+
+### 5. Set up checkpoint tables
+
+```bash
+python manage.py setup_agent_db
+```
+
+---
+
+## Django ORM Tools
+
+The built-in ORM toolkit gives your agent safe CRUD access to your Django models.
+
+### Configure `MODEL_WHITELIST`
+
+```python
+DJANGO_AI_AGENT = {
+    ...
+    "MODEL_WHITELIST": {
+        # Strategy A: explicit field allowlist (only these fields are accessible)
+        "Product": {
+            "app_label": "store",
+            "display_name": "Store Product",
+            "fields": ["id", "name", "price", "category", "stock", "is_active"],
+        },
+
+        # Strategy B: field blocklist (all fields EXCEPT these)
+        "Order": {
+            "app_label": "store",
+            "display_name": "Customer Order",
+            "exclude_fields": ["payment_reference", "internal_notes", "cost_breakdown"],
+        },
+    },
+
+    # Global substrings always blocked regardless of per-model config
+    "BLOCKED_FIELD_SUBSTRINGS": [
+        "password", "token", "secret", "is_superuser", "is_staff",
+    ],
+}
+```
+
+### Use the toolkit
+
+```python
+from django_ai_agent import DjangoAgent
+from django_ai_agent.tools import DjangoORMToolkit
+
+toolkit = DjangoORMToolkit(include_write=True)
+
+admin_agent = DjangoAgent(
+    name="admin",
+    system_prompt="You are the admin assistant. Confirm before making changes.",
+    tools=toolkit.tools,
+    approval_tools=toolkit.approval_tools,  # add_record, update_record require approval
+)
+```
+
+Available tools: `get_model_schema`, `query_records`, `add_record`, `update_record`
+
+---
+
+## Human-in-the-Loop Approval
+
+When the agent calls a tool in `approval_tools`, it pauses and sends a `tool_approval` SSE event:
+
+```
+event: tool_approval
+data: {"tool_calls": [{"id": "tc123", "name": "add_record", "human_label": "Create a new Store Product record"}]}
+```
+
+Your frontend shows a confirmation UI. The user approves/denies each action, then you call:
+
+```python
+# myapp/views.py
+from django_ai_agent import resume_agent
+
+def approve_view(request):
+    gen = resume_agent(
+        agent=admin_agent,
+        thread_id=request.POST["thread_id"],
+        decisions={
+            "tc123": "approve",  # or "deny"
+        },
+        user_id=request.user.id,
+    )
+    return StreamingHttpResponse(gen, content_type="text/event-stream")
+```
+
+---
+
+## SSE Event Reference
+
+| Event | Data | Description |
+|---|---|---|
+| `token` | `{"text": "...", "model_name": "..."}` | Partial AI response chunk |
+| `tool_approval` | `{"tool_calls": [...]}` | Agent paused, awaiting approval |
+| `done` | `{"model_name": "..."}` | Turn complete |
+| `error` | `{"message": "..."}` | Exception occurred |
+
+---
+
+## Advanced: Callable System Prompt
+
+For dynamic context (user language, date injection, per-user personalization):
+
+```python
+from langchain_core.messages import SystemMessage
+from django.utils import timezone
+
+def my_state_modifier(state: dict, config: dict):
+    messages = state.get("messages", [])
+    summary = state.get("summary", "")
+    user_id = config.get("configurable", {}).get("user_id")
+
+    system = (
+        f"You are a personalized assistant.\n"
+        f"Today: {timezone.now().strftime('%Y-%m-%d')}\n"
+        f"User: {user_id or 'anonymous'}"
+    )
+    if summary:
+        system += f"\n\nConversation so far:\n{summary}"
+
+    return [SystemMessage(content=system)] + messages
+
+agent = DjangoAgent(
+    name="personalized",
+    system_prompt=my_state_modifier,  # callable instead of string
+    tools=[...],
+)
+```
+
+---
+
+## Callbacks
+
+Optional callbacks for side effects (message persistence, analytics):
+
+```python
+def save_message(full_text: str, extra: dict):
+    ChatMessage.objects.create(text=full_text, is_user=False)
+
+gen = stream_agent(
+    agent=my_agent,
+    message=message,
+    thread_id=thread_id,
+    on_token=lambda text: print(text, end=""),     # called per token
+    on_approval=lambda payload: notify_user(payload),  # called on approval pause
+    on_done=save_message,                            # called at turn end
+)
+```
+
+---
+
+## Running the Example Project
+
+```bash
+cd django-langgraph-agent/
+
+# Install the package locally
+pip install -e ".[test]"
+
+# Set your OpenRouter API key
+export OPENROUTER_API_KEY=sk-or-...
+
+# Run migrations for the example store models
+python -m django migrate --settings=example_project.settings
+
+# Set up LangGraph checkpoint tables
+python -m django setup_agent_db --settings=example_project.settings
+
+# Load some sample data (optional)
+python -m django shell --settings=example_project.settings -c "
+from example_project.store.models import Product, Order
+Product.objects.create(name='Wireless Earbuds', price=49.99, category='electronics', stock=120)
+Product.objects.create(name='Laptop Stand', price=29.99, category='accessories', stock=45)
+Product.objects.create(name='USB-C Hub', price=39.99, category='electronics', stock=80)
+Order.objects.create(customer_name='Alice', customer_email='alice@example.com', status='pending', total_amount=49.99)
+print('Sample data created!')
+"
+
+# Start the dev server
+python -m django runserver --settings=example_project.settings
+```
+
+Then open [http://localhost:8000/chat/](http://localhost:8000/chat/) to see the interactive test UI.
+
+---
+
+## Running Tests
+
+```bash
+pip install -e ".[test]"
+pytest tests/ -v
+```
+
+---
+
+## License
+
+MIT

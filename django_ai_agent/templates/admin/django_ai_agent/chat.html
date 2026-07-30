@@ -1,0 +1,777 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}{{ title|default:_('AI Assistant') }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+    .ai-font-inter { font-family: 'Inter', sans-serif; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex gap-4 mx-auto mb-4 w-full ai-font-inter" style="height: calc(100vh - 120px); max-width: 96rem;">
+    <!-- Mobile Backdrop -->
+    <div id="ai-sidebar-backdrop" class="fixed inset-0 bg-gray-900/50 z-40 hidden" style="display: none;" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <div id="ai-sidebar" class="w-80 bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden hidden md:flex flex-col flex-shrink-0 ai-bg-card">
+        <div class="p-4 border-b border-gray-200 flex justify-between items-center ai-bg-header z-10">
+            <h3 class="font-bold text-gray-800 ai-text-header">Conversations</h3>
+            <div class="flex items-center gap-2">
+                <a href="?agent={{ current_agent.name }}&thread_id=new" class="text-primary-600 hover:bg-primary-50 p-2 rounded-xl transition-colors flex items-center justify-center dark:hover:bg-gray-800" title="New Conversation">
+                    <span class="material-symbols-outlined text-lg">add</span>
+                </a>
+                <button type="button" onclick="toggleSidebar()" class="ai-mobile-close-btn md:hidden p-2 rounded-xl transition-colors flex items-center justify-center">
+                    <span class="material-symbols-outlined text-lg">close</span>
+                </button>
+            </div>
+        </div>
+        <div class="p-3.5 space-y-3 overflow-y-auto ai-bg-messages custom-scrollbar flex-grow">
+            {% for thread in threads %}
+            <div class="group relative flex items-center justify-between p-3.5 px-4 py-4 rounded-xl border transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md {% if current_thread_id == thread.id %}ai-bg-thread-card-active border-emerald-500 shadow-sm ring-1 ring-emerald-500/50 dark:border-emerald-500/80 dark:ring-emerald-500/30{% else %}ai-bg-thread-card border-transparent hover:border-gray-200 dark:border-transparent dark:hover:border-gray-700/60{% endif %}">
+                <!-- Chat Icon (Left) -->
+                <div class="flex-shrink-0 flex items-center justify-center h-10 w-10 rounded-xl mr-3 {% if current_thread_id == thread.id %}bg-emerald-600 text-white shadow-xs{% else %}bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500{% endif %}">
+                    <span class="material-symbols-outlined text-xl">chat_bubble</span>
+                </div>
+
+                <!-- Title & Date (Middle with flex-grow) -->
+                <a href="?agent={{ current_agent.name }}&thread_id={{ thread.id }}" class="flex-grow min-w-0 block focus:outline-none py-0.5 mr-2">
+                    <div class="text-sm font-semibold truncate leading-normal {% if current_thread_id == thread.id %}text-emerald-950 dark:text-emerald-100{% else %}text-gray-800 dark:text-gray-200{% endif %}" title="{{ thread.title }}">
+                        {{ thread.title }}
+                    </div>
+                    <div class="text-xs font-normal opacity-75 mt-0.5 flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+                        <span>{{ thread.start_time|date:"M d, H:i" }}</span>
+                    </div>
+                </a>
+
+                <!-- Delete Action Button (Far Right after space-between) -->
+                <button type="button" onclick="deleteThread(event, '{{ thread.id }}')"
+                    class="ai-thread-delete-btn flex-shrink-0 p-2 text-gray-400 hover:text-red-500 rounded-lg transition-all duration-150 flex items-center justify-center cursor-pointer ml-auto"
+                    title="Delete Conversation">
+                    <span class="material-symbols-outlined text-xl">delete</span>
+                </button>
+            </div>
+            {% empty %}
+            <div class="text-center text-gray-500 text-sm mt-4 italic">No conversations yet</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Main Chat Area -->
+    <div class="ai-bg-card flex flex-col bg-white rounded-xl shadow-xl border border-gray-200 overflow-hidden flex-grow" style="max-width: 64rem;">
+
+        <!-- Header -->
+        <div class="ai-bg-header px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white flex justify-between items-center shadow-sm z-10 relative">
+            <div class="flex items-center gap-3">
+                <button type="button" onclick="toggleSidebar()" class="ai-mobile-menu-btn md:hidden rounded-lg p-1.5 flex items-center justify-center transition-colors">
+                    <span class="material-symbols-outlined text-[20px]">menu</span>
+                </button>
+                <div class="bg-emerald-600 rounded-full p-2 text-white shadow-md flex items-center justify-center h-10 w-10">
+                    <span class="material-symbols-outlined text-xl">smart_toy</span>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <select id="agent-switcher" onchange="switchAgent(this.value)" class="bg-transparent font-bold text-gray-800 ai-text-header text-lg border-none focus:ring-0 cursor-pointer p-0">
+                            {% for agent in agents %}
+                            <option value="{{ agent.name }}" class="dark:bg-gray-900 dark:text-gray-100" {% if current_agent.name == agent.name %}selected{% endif %}>
+                                {{ agent.display_name }} ({{ agent.name }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="flex items-center gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">
+                        <span class="relative flex h-2 w-2">
+                            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        Online & Ready
+                    </div>
+                </div>
+            </div>
+            <div>
+                <a href="?agent={{ current_agent.name }}&thread_id=new" class="text-gray-400 hover:text-emerald-600 transition-colors p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center" title="New Chat">
+                    <span class="material-symbols-outlined text-xl">add_comment</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Chat Messages Area -->
+        <div id="chatbox" class="ai-bg-messages overflow-y-auto p-6 space-y-6 bg-slate-50 custom-scrollbar scroll-smooth relative" style="flex-grow: 1;">
+            <div class="flex justify-center my-2">
+                <span class="ai-bg-time text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+                    Conversation Started with <strong>{{ current_agent.display_name }}</strong>
+                </span>
+            </div>
+
+            <!-- Initial Greeting if empty -->
+            {% if not chat_history %}
+            <div class="flex items-start group">
+                <div class="flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 rounded-full p-2.5 text-white shadow-md mt-1">
+                    <span class="material-symbols-outlined text-sm">smart_toy</span>
+                </div>
+                <div class="ml-4 max-w-[85%]">
+                    <div class="ai-bg-bubble-agent bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl rounded-tl-sm px-5 py-4 text-gray-800 dark:text-gray-100 shadow-sm leading-relaxed prose dark:prose-invert text-sm">
+                        <p>Hello! I am <strong>{{ current_agent.display_name }}</strong>. How can I help you today?</p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Input Area -->
+        <div class="ai-bg-input-area p-4 sm:p-6 border-t border-gray-200 bg-white/90 backdrop-blur-md z-10 rounded-b-xl relative">
+            <form id="chat-form" class="flex flex-col w-full max-w-4xl mx-auto relative" style="width: 100%;" onsubmit="sendMessage(event)">
+                <div class="relative flex items-end bg-gray-50 dark:bg-gray-900/50 border border-gray-300 dark:border-gray-600 rounded-xl shadow-sm focus-within:ring-2 focus-within:ring-emerald-500/50 focus-within:border-emerald-500 transition-all duration-300 w-full p-1.5 pl-5 overflow-hidden">
+                    <textarea id="chat-input" rows="1"
+                        class="w-full bg-transparent border-none focus:outline-none focus:ring-0 text-gray-900 dark:text-gray-100 resize-none overflow-y-auto text-[15px] placeholder-gray-400 dark:placeholder-gray-500 self-center py-3"
+                        style="min-height: 44px; max-height: 200px; width: 100%; line-height: 1.5; outline: none !important; box-shadow: none !important;"
+                        placeholder="Message {{ current_agent.display_name }}..." required></textarea>
+                    
+                    <button type="submit" id="send-btn"
+                        class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-full flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed shadow-sm transition-all duration-200 transform hover:scale-105 active:scale-95 flex-shrink-0 ml-2 self-end mb-1"
+                        style="height: 42px; width: 42px;">
+                        <span class="material-symbols-outlined" style="font-size: 20px; margin-left: 2px;">arrow_upward</span>
+                    </button>
+                </div>
+            </form>
+            <div class="text-center mt-2.5">
+                <span class="text-[11px] text-gray-400 dark:text-gray-500 font-medium">AI can make mistakes. Consider verifying important actions.</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Hide mobile menu & close buttons on medium and large screens */
+    @media (min-width: 768px) {
+        .ai-mobile-menu-btn, .ai-mobile-close-btn {
+            display: none !important;
+        }
+    }
+
+    @media (max-width: 767px) {
+        #ai-sidebar.mobile-open {
+            display: flex !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            z-index: 50;
+            max-width: 85vw;
+        }
+    }
+
+    /* Resilient Dark Mode Styles matching Unfold Theme */
+    .dark .ai-bg-card {
+        background-color: #111827 !important;
+        border-color: #374151 !important;
+    }
+
+    .dark .ai-bg-header {
+        background: linear-gradient(to right, #111827, #1f2937) !important;
+        border-bottom-color: #374151 !important;
+    }
+
+    .dark .ai-text-header {
+        color: #f3f4f6 !important;
+    }
+
+    .ai-bg-thread-card {
+        background-color: #ffffff;
+        border-color: #e5e7eb;
+        color: #4b5563;
+    }
+    .ai-bg-thread-card:hover {
+        background-color: #f9fafb;
+    }
+    .ai-bg-thread-card-active {
+        background-color: #ecfdf5;
+        border-color: #a7f3d0;
+        color: #047857;
+    }
+
+    .dark .ai-bg-thread-card {
+        background-color: #1f2937 !important;
+        border-color: #374151 !important;
+        color: #d1d5db !important;
+    }
+    .dark .ai-bg-thread-card:hover {
+        background-color: #374151 !important;
+    }
+    .dark .ai-bg-thread-card-active {
+        background-color: #111827 !important;
+        border-color: #047857 !important;
+        color: #6ee7b7 !important;
+    }
+
+    /* Delete Button Specific Colors */
+    .ai-thread-delete-btn {
+        color: #9ca3af !important;
+        background-color: transparent !important;
+    }
+    .ai-thread-delete-btn:hover {
+        color: #ef4444 !important;
+        background-color: rgba(239, 68, 68, 0.12) !important;
+    }
+    .dark .ai-thread-delete-btn {
+        color: #9ca3af !important;
+    }
+    .dark .ai-thread-delete-btn:hover {
+        color: #f87171 !important;
+        background-color: rgba(239, 68, 68, 0.25) !important;
+    }
+
+    .dark .ai-bg-messages {
+        background-color: #1f2937 !important;
+    }
+
+    .dark .ai-bg-input-area {
+        background-color: #111827 !important;
+        border-top-color: #374151 !important;
+    }
+
+    .dark .ai-bg-input {
+        background-color: #1f2937 !important;
+        color: #ffffff !important;
+        border-color: #4b5563 !important;
+    }
+
+    .dark .ai-bg-input:focus {
+        border-color: #10b981 !important;
+    }
+
+    .dark .ai-bg-input::placeholder {
+        color: #9ca3af !important;
+    }
+
+    /* Enhanced User Bubble Styling */
+    .ai-bg-bubble-user {
+        background: linear-gradient(135deg, #059669 0%, #0d9488 100%) !important;
+        color: #ffffff !important;
+        border: 1px solid rgba(255, 255, 255, 0.15) !important;
+        box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2), 0 2px 4px -1px rgba(16, 185, 129, 0.1) !important;
+    }
+    .dark .ai-bg-bubble-user {
+        background: linear-gradient(135deg, #047857 0%, #0f766e 100%) !important;
+        color: #f3f4f6 !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .ai-bg-bubble-user-icon {
+        background: linear-gradient(135deg, #10b981 0%, #14b8a6 100%) !important;
+        color: #ffffff !important;
+        border-color: rgba(255, 255, 255, 0.9) !important;
+    }
+    .dark .ai-bg-bubble-user-icon {
+        background: linear-gradient(135deg, #047857 0%, #0d9488 100%) !important;
+        color: #ffffff !important;
+        border-color: #1f2937 !important;
+    }
+
+    .dark .ai-bg-bubble-agent {
+        background-color: #374151 !important;
+        border-color: #4b5563 !important;
+        color: #e5e7eb !important;
+    }
+
+    .dark .ai-bg-time {
+        background-color: rgba(17, 24, 39, 0.5) !important;
+        color: #9ca3af !important;
+        border-color: #374151 !important;
+    }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.3); border-radius: 10px; }
+
+    /* Thinking / Thought blocks from models like DeepSeek R1 or Gemini Flash Thinking */
+    think, thought {
+        display: block;
+        font-size: 0.875rem;
+        color: #6b7280;
+        background-color: #f9fafb;
+        border-left: 3px solid #cbd5e1;
+        padding: 10px 14px;
+        margin-top: 12px;
+        margin-bottom: 12px;
+        border-radius: 0 8px 8px 0;
+        font-style: italic;
+        position: relative;
+    }
+    think::before, thought::before {
+        content: "Thought Process";
+        display: block;
+        font-weight: 600;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: #9ca3af;
+        margin-bottom: 6px;
+        font-style: normal;
+    }
+    .dark think, .dark thought {
+        color: #d1d5db;
+        background-color: #1f2937;
+        border-left-color: #4b5563;
+    }
+    .dark think::before, .dark thought::before {
+        color: #6b7280;
+    }
+
+    .prose p { margin-top: 0.5em; margin-bottom: 0.5em; }
+    .prose ul { list-style-type: disc; padding-inline-start: 1.5em; margin-top: 0.5em; margin-bottom: 0.5em; }
+    .prose ol { list-style-type: decimal; padding-inline-start: 1.5em; margin-top: 0.5em; margin-bottom: 0.5em; }
+    .prose pre { background-color: #f1f5f9; padding: 1em; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5em; margin-bottom: 0.5em; border: 1px solid #e2e8f0; }
+    .dark .prose pre { background-color: #111827; border: 1px solid #374151; }
+    .prose code { font-family: monospace; font-size: 0.9em; background-color: rgba(0, 0, 0, 0.05); padding: 0.2em 0.4em; border-radius: 0.25rem; color: #1f2937; }
+    .dark .prose code { background-color: rgba(255, 255, 255, 0.1); color: #f3f4f6; }
+
+    .approval-card-wrap {
+        background: linear-gradient(to bottom right, #ffffff, #fffbeb);
+        border: 1px solid #fde68a;
+        border-radius: 1rem;
+        padding: 1rem;
+        box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        max-width: 95%;
+        margin-left: 0.5rem;
+        width: 100%;
+    }
+    .dark .approval-card-wrap {
+        background: linear-gradient(to bottom right, #1f2937, #111827) !important;
+        border-color: #78350f !important;
+    }
+    .approval-card-title { color: #b45309; font-weight: 600; font-size: 0.875rem; margin-bottom: 0.75rem; }
+    .dark .approval-card-title { color: #fcd34d !important; }
+    .approval-tool-item {
+        margin-bottom: 0.75rem;
+        padding: 0.75rem;
+        background-color: #fff;
+        border: 1px solid #fde68a;
+        border-radius: 0.75rem;
+        font-size: 0.875rem;
+    }
+    .dark .approval-tool-item { background-color: #1f2937 !important; border-color: #78350f !important; }
+    .approval-tool-name { font-weight: 600; color: #92400e; margin-bottom: 0.25rem; }
+    .dark .approval-tool-name { color: #fbbf24 !important; }
+</style>
+
+<script>
+    const currentAgent = "{{ current_agent.name }}";
+    const currentThreadId = "{{ current_thread_id }}";
+    const chatbox = document.getElementById('chatbox');
+    const chatInput = document.getElementById('chat-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatForm = document.getElementById('chat-form');
+
+    function switchAgent(agentName) {
+        window.location.href = "?agent=" + agentName;
+    }
+
+    async function deleteThread(event, threadId) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!confirm('Are you sure you want to delete this conversation?')) return;
+
+        try {
+            const resp = await fetch('/api/agent/chat/delete/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ thread_id: threadId })
+            });
+
+            if (resp.ok) {
+                if (currentThreadId === threadId) {
+                    window.location.href = "?agent=" + currentAgent + "&thread_id=new";
+                } else {
+                    window.location.reload();
+                }
+            } else {
+                alert('Could not delete conversation.');
+            }
+        } catch (err) {
+            alert('Error deleting conversation.');
+        }
+    }
+
+    chatInput.addEventListener('input', function () {
+        this.style.height = '50px';
+        this.style.height = (this.scrollHeight) + 'px';
+    });
+
+    chatInput.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            if (this.value.trim() !== '') {
+                chatForm.dispatchEvent(new Event('submit'));
+            }
+        }
+    });
+
+    marked.setOptions({ breaks: true, gfm: true });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        {% if chat_history %}
+        chatbox.innerHTML = `
+            <div class="flex justify-center my-2">
+                <span class="ai-bg-time text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full border border-gray-200">
+                    Conversation Restored
+                </span>
+            </div>
+        `;
+        {% for msg in chat_history %}
+        {% if msg.is_user %}
+        appendMessage('user', `{{ msg.text|escapejs }}`);
+        {% else %}
+        appendMessage('agent', `{{ msg.text|escapejs }}`, `{{ msg.model_name|default:""|escapejs }}`);
+        {% endif %}
+        {% endfor %}
+        chatbox.scrollTop = chatbox.scrollHeight;
+        {% endif %}
+    });
+
+    function appendMessage(sender, text, modelName = '') {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = sender === 'user' ? 'flex items-start justify-end group mt-6' : 'flex items-start group transition-all duration-300 ease-in-out opacity-0 translate-y-2 mt-6';
+
+        let innerHtml = '';
+        const containsArabic = /[\u0600-\u06FF]/.test(text);
+        const dirAttr = containsArabic ? 'dir="rtl"' : '';
+
+        if (sender === 'user') {
+            const escapedText = text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            innerHtml = `
+                <div class="mr-3 flex flex-col items-end max-w-[85%]">
+                    <span class="text-[10px] text-gray-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">You</span>
+                    <div class="ai-bg-bubble-user text-white rounded-xl rounded-tr-sm px-5 py-3.5 shadow-md text-[15px] leading-relaxed" ${dirAttr}>
+                        <p>${escapedText}</p>
+                    </div>
+                </div>
+                <div class="ai-bg-bubble-user-icon flex-shrink-0 border-2 rounded-full p-2.5 text-white shadow-md mt-5">
+                    <span class="material-symbols-outlined text-sm">person</span>
+                </div>
+            `;
+        } else {
+            const parsedContent = marked.parse(text);
+            const modelBadgeHtml = modelName ? `
+                <span class="inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700/80 shadow-xs" title="Model: ${modelName}">
+                    <span class="material-symbols-outlined text-[12px] text-emerald-500">memory</span>
+                    <span>${modelName}</span>
+                </span>
+            ` : '';
+
+            innerHtml = `
+                <div class="flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-white rounded-full p-2.5 text-white shadow-md mt-5">
+                    <span class="material-symbols-outlined text-sm">smart_toy</span>
+                </div>
+                <div class="ml-3 flex flex-col items-start relative group/message w-full sm:max-w-[90%]">
+                    <div class="flex items-center justify-between mb-1.5 w-full">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ current_agent.display_name }}</span>
+                            ${modelBadgeHtml}
+                        </div>
+                    </div>
+                    <div class="ai-bg-bubble-agent bg-white border border-gray-100 dark:border-gray-700/80 rounded-xl rounded-tl-sm px-5 py-4 sm:px-6 sm:py-5 text-gray-800 shadow-md leading-relaxed prose dark:prose-invert text-[15px] w-full" ${dirAttr}>
+                        ${parsedContent}
+                    </div>
+                </div>
+            `;
+        }
+
+        msgDiv.innerHTML = innerHtml;
+        chatbox.appendChild(msgDiv);
+
+        if (sender === 'agent') {
+            setTimeout(() => {
+                msgDiv.classList.remove('opacity-0', 'translate-y-2');
+                msgDiv.classList.add('opacity-100', 'translate-y-0');
+            }, 50);
+        }
+
+        chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    async function sendMessage(e) {
+        e.preventDefault();
+        const message = chatInput.value.trim();
+        if (!message) return;
+
+        appendMessage('user', message);
+        chatInput.value = '';
+        chatInput.style.height = '50px';
+        chatInput.disabled = true;
+        sendBtn.disabled = true;
+
+        const loadingId = 'loading-' + Date.now();
+        const loadingDiv = document.createElement('div');
+        loadingDiv.id = loadingId;
+        loadingDiv.className = 'flex items-start mt-6 transition-all duration-300 ease-in-out';
+        loadingDiv.innerHTML = `
+            <div class="ai-bg-bubble-user-icon flex-shrink-0 bg-gray-200 rounded-full p-2.5 text-gray-500 shadow-sm mt-1 animate-pulse border border-white">
+                <span class="material-symbols-outlined text-sm">smart_toy</span>
+            </div>
+            <div class="ml-4 bg-transparent px-4 py-3 text-gray-500 flex items-center space-x-2">
+                <div class="flex space-x-1">
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0s;"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s;"></div>
+                    <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.4s;"></div>
+                </div>
+                <span class="text-xs italic ml-2 opacity-75">Thinking...</span>
+            </div>
+        `;
+        chatbox.appendChild(loadingDiv);
+        chatbox.scrollTop = chatbox.scrollHeight;
+
+        function removeLoading() {
+            const el = document.getElementById(loadingId);
+            if (el) el.remove();
+        }
+
+        try {
+            const resp = await fetch('/api/agent/chat/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    agent: currentAgent,
+                    message: message,
+                    thread_id: currentThreadId
+                })
+            });
+
+            if (!resp.ok) {
+                removeLoading();
+                appendMessage('agent', `**Error ${resp.status}:** ${resp.statusText}`);
+                return;
+            }
+
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let streamBubble = null;
+            let streamContent = '';
+            let streamUniqueId = '';
+
+            function ensureStreamBubble() {
+                if (streamBubble) return;
+                removeLoading();
+                streamUniqueId = 'stream-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'flex items-start group transition-all duration-300 ease-in-out mt-6';
+                msgDiv.innerHTML = `
+                    <div class="flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-white rounded-full p-2.5 text-white shadow-md mt-5">
+                        <span class="material-symbols-outlined text-sm">smart_toy</span>
+                    </div>
+                    <div class="ml-3 flex flex-col items-start w-full sm:max-w-[90%]">
+                        <div class="flex items-center justify-between mb-1.5 w-full">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ current_agent.display_name }}</span>
+                                <span id="${streamUniqueId}-badge" class="hidden inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700/80 shadow-xs">
+                                    <span class="material-symbols-outlined text-[12px] text-emerald-500">memory</span>
+                                    <span class="model-name-text"></span>
+                                </span>
+                            </div>
+                        </div>
+                        <div id="${streamUniqueId}" class="ai-bg-bubble-agent bg-white border border-gray-100 dark:border-gray-700/80 rounded-xl rounded-tl-sm px-5 py-4 sm:px-6 sm:py-5 text-gray-800 shadow-md leading-relaxed prose dark:prose-invert text-[15px] w-full"></div>
+                    </div>
+                `;
+                chatbox.appendChild(msgDiv);
+                streamBubble = document.getElementById(streamUniqueId);
+            }
+
+            function updateModelBadge(modelName) {
+                if (!modelName || !streamUniqueId) return;
+                const badgeEl = document.getElementById(`${streamUniqueId}-badge`);
+                if (badgeEl) {
+                    const textEl = badgeEl.querySelector('.model-name-text');
+                    if (textEl) textEl.textContent = modelName;
+                    badgeEl.classList.remove('hidden');
+                }
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+
+                let currentEvent = null;
+                for (const line of lines) {
+                    if (line.startsWith('event:')) {
+                        currentEvent = line.slice(6).trim();
+                    } else if (line.startsWith('data:')) {
+                        try {
+                            const data = JSON.parse(line.slice(5).trim());
+                            if (currentEvent === 'token') {
+                                ensureStreamBubble();
+                                streamContent += data.text || '';
+                                streamBubble.innerHTML = marked.parse(streamContent);
+                                if (data.model_name) updateModelBadge(data.model_name);
+                                if (/[\u0600-\u06FF]/.test(streamContent)) streamBubble.setAttribute('dir', 'rtl');
+                                chatbox.scrollTop = chatbox.scrollHeight;
+                            } else if (currentEvent === 'tool_approval') {
+                                removeLoading();
+                                renderApprovalCard(data);
+                            } else if (currentEvent === 'error') {
+                                removeLoading();
+                                appendMessage('agent', `**Error:** ${data.message}`);
+                            } else if (currentEvent === 'done') {
+                                if (data && data.model_name) updateModelBadge(data.model_name);
+                            }
+                        } catch { }
+                        currentEvent = null;
+                    }
+                }
+            }
+        } catch (error) {
+            removeLoading();
+            appendMessage('agent', '**Error:** Could not connect to AI service.');
+        } finally {
+            chatInput.disabled = false;
+            sendBtn.disabled = false;
+            chatInput.focus();
+        }
+    }
+
+    function renderApprovalCard(data) {
+        const card = document.createElement('div');
+        card.className = 'flex items-start group mt-6 mb-3 w-full';
+        const toolsList = (data.tool_calls || []).map(tc => {
+            const text = tc.human_label || tc.name;
+            const dirAttr = /[\u0600-\u06FF]/.test(text) ? 'dir="rtl"' : '';
+            return `
+            <div class="approval-tool-item" ${dirAttr}>
+                <p class="approval-tool-name" style="margin-bottom: 0;">🔧 ${marked.parseInline(text)}</p>
+            </div>`;
+        }).join('');
+        const callIds = (data.tool_calls || []).map(tc => tc.id);
+        card.innerHTML = `
+            <div class="approval-card-wrap">
+                <p class="approval-card-title text-base">⚠️ The AI wants to perform the following action(s). Approve?</p>
+                ${toolsList}
+                <div class="approval-actions-row flex flex-wrap gap-2 sm:gap-4 mt-5">
+                    <button onclick='handleApproval(this, ${JSON.stringify(callIds)}, "approve")' class="px-4 py-2 sm:px-6 sm:py-2 bg-green-600 text-white text-sm font-medium rounded-full hover:bg-green-700 shadow-sm transition transform hover:-translate-y-0.5">✅ Approve</button>
+                    <button onclick='handleApproval(this, ${JSON.stringify(callIds)}, "deny")' class="px-4 py-2 sm:px-6 sm:py-2 bg-red-500 text-white text-sm font-medium rounded-full hover:bg-red-600 shadow-sm transition transform hover:-translate-y-0.5">❌ Deny</button>
+                </div>
+            </div>`;
+        chatbox.appendChild(card);
+        chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    async function handleApproval(btn, callIds, action) {
+        const card = btn.closest('.approval-card-wrap');
+        if (!card) return;
+        card.querySelectorAll('button').forEach(b => b.disabled = true);
+        const label = action === 'approve' ? '✅ Approved — resuming...' : '❌ Denied — resuming...';
+        const actionsRow = card.querySelector('.approval-actions-row');
+        if (actionsRow) actionsRow.innerHTML = `<span class="text-sm italic" style="color:#9ca3af;">${label}</span>`;
+
+        const decisions = {};
+        callIds.forEach(id => decisions[id] = action);
+
+        try {
+            const resp = await fetch('/api/agent/chat/approve/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({ agent: currentAgent, thread_id: currentThreadId, decisions })
+            });
+
+            if (!resp.ok) {
+                appendMessage('agent', `**Error ${resp.status}:** ${resp.statusText}`);
+                return;
+            }
+
+            const reader = resp.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let streamBubble = null;
+            let streamContent = '';
+            let streamUniqueId = '';
+
+            function ensureStreamBubble() {
+                if (streamBubble) return;
+                streamUniqueId = 'resume-' + Date.now() + '-' + Math.floor(Math.random() * 10000);
+                const msgDiv = document.createElement('div');
+                msgDiv.className = 'flex items-start group transition-all duration-300 ease-in-out mt-6';
+                msgDiv.innerHTML = `
+                    <div class="flex-shrink-0 bg-gradient-to-br from-emerald-500 to-emerald-700 border-2 border-white rounded-full p-2.5 text-white shadow-md mt-5">
+                        <span class="material-symbols-outlined text-sm">smart_toy</span>
+                    </div>
+                    <div class="ml-3 flex flex-col items-start w-full sm:max-w-[90%]">
+                        <div class="flex items-center justify-between mb-1.5 w-full">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs font-semibold text-gray-700 dark:text-gray-300">{{ current_agent.display_name }}</span>
+                            </div>
+                        </div>
+                        <div id="${streamUniqueId}" class="ai-bg-bubble-agent bg-white border border-gray-100 dark:border-gray-700/80 rounded-xl rounded-tl-sm px-5 py-4 sm:px-6 sm:py-5 text-gray-800 shadow-md leading-relaxed prose dark:prose-invert text-[15px] w-full"></div>
+                    </div>
+                `;
+                chatbox.appendChild(msgDiv);
+                streamBubble = document.getElementById(streamUniqueId);
+            }
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
+                let currentEvent = null;
+                for (const line of lines) {
+                    if (line.startsWith('event:')) { currentEvent = line.slice(6).trim(); }
+                    else if (line.startsWith('data:')) {
+                        try {
+                            const data = JSON.parse(line.slice(5).trim());
+                            if (currentEvent === 'token') {
+                                ensureStreamBubble();
+                                streamContent += data.text || '';
+                                streamBubble.innerHTML = marked.parse(streamContent);
+                                if (/[\u0600-\u06FF]/.test(streamContent)) streamBubble.setAttribute('dir', 'rtl');
+                                chatbox.scrollTop = chatbox.scrollHeight;
+                            } else if (currentEvent === 'error') {
+                                appendMessage('agent', `**Error:** ${data.message}`);
+                            }
+                        } catch { }
+                        currentEvent = null;
+                    }
+                }
+            }
+        } catch (err) {
+            appendMessage('agent', '**Error:** Could not resume after approval.');
+        }
+    }
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('ai-sidebar');
+        const backdrop = document.getElementById('ai-sidebar-backdrop');
+        if (sidebar.classList.contains('mobile-open')) {
+            sidebar.classList.remove('mobile-open');
+            backdrop.style.display = 'none';
+        } else {
+            sidebar.classList.add('mobile-open');
+            backdrop.style.display = 'block';
+        }
+    }
+</script>
+{% endblock %}
