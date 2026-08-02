@@ -1,8 +1,13 @@
 # django-langgraph-agent
 
+![Status: Beta](https://img.shields.io/badge/status-beta-orange)
+
+> [!WARNING]
+> **Beta Release**: This project is currently in **Beta** and is **not ready for production use**. Features and APIs are subject to change.
+
 A reusable Django package for building **streaming AI agents** powered by [LangGraph](https://github.com/langchain-ai/langgraph) and [OpenRouter](https://openrouter.ai).
 
-Battle-tested in production at [Tathbeet](https://tathbeet.space) — a Quran memorization platform serving thousands of users.
+Battle-tested in internal workflows at [Tathbeet](https://tathbeet.space) — a Quran memorization platform.
 
 ---
 

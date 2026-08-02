@@ -9,7 +9,7 @@ description = "A reusable Django package for building streaming AI agents with L
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.10"
-authors = [{ name = "Tathbeet Team" }]
+authors = [{ name = "Mohammed chahboun" }]
 keywords = ["django", "ai", "agent", "langgraph", "llm", "openrouter", "streaming", "sse"]
 classifiers = [
     "Development Status :: 3 - Alpha",
@@ -55,6 +55,10 @@ Issues = "https://github.com/tathbeet/django-langgraph-agent/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["django_ai_agent*"]
+
+[tool.setuptools.package-data]
+"django_ai_agent" = ["templates/**/*", "static/**/*"]
+
 
 [tool.black]
 line-length = 100
