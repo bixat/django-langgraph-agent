@@ -1,10 +1,10 @@
 tests/__pycache__/
 example_project/store/__pycache__/
-django_ai_agent/__pycache__/
+django_langgraph_agent/__pycache__/
 example_project/__pycache__/
 example_project/store/migrations/__pycache__/
 .DS_Store
-django_ai_agent/migrations/__pycache__/
-django_ai_agent/tools/__pycache__/
-django_ai_agent/management/commands/__pycache__/
-django_ai_agent/management/__pycache__/
+django_langgraph_agent/migrations/__pycache__/
+django_langgraph_agent/tools/__pycache__/
+django_langgraph_agent/management/commands/__pycache__/
+django_langgraph_agent/management/__pycache__/

@@ -1,10 +1,10 @@
 """
-django_ai_agent/tools/django_orm.py
+django_langgraph_agent/tools/django_orm.py
 
 Optional built-in Django ORM tools for django-langgraph-agent.
 
 Provides a DjangoORMToolkit that reads model configuration from
-DJANGO_AI_AGENT["MODEL_WHITELIST"] and generates safe CRUD tools:
+DJANGO_LANGGRAPH_AGENT["MODEL_WHITELIST"] and generates safe CRUD tools:
 
   - get_model_schema          : Describe a model's fields to the LLM
   - query_records             : Filter/paginate model records
@@ -22,7 +22,7 @@ from django.apps import apps
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
-from django_ai_agent.conf import agent_settings
+from django_langgraph_agent.conf import agent_settings
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +146,7 @@ def get_whitelisted_models_summary(allowed_models: list | None = None) -> str:
             lines.append(f"- {name} ({disp})")
     else:
         for m in apps.get_models():
-            if not m._meta.app_label.startswith("django_ai_agent") and not m._meta.app_label.startswith("admin") and not m._meta.app_label.startswith("sessions"):
+            if not m._meta.app_label.startswith("django_langgraph_agent") and not m._meta.app_label.startswith("django_ai_agent") and not m._meta.app_label.startswith("admin") and not m._meta.app_label.startswith("sessions"):
                 lines.append(f"- {m._meta.object_name} ({m._meta.verbose_name.title()})")
 
     return "\n".join(lines)

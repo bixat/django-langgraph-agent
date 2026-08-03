@@ -9,8 +9,8 @@ import pytest
 from django.test import override_settings
 from langchain_core.tools import tool
 
-from django_ai_agent import DjangoAgent, register_tool, unregister_tool
-from django_ai_agent.models import AgentConfig, ChatThread, ChatMessage
+from django_langgraph_agent import DjangoAgent, register_tool, unregister_tool
+from django_langgraph_agent.models import AgentConfig, ChatThread, ChatMessage
 
 
 @tool
@@ -22,7 +22,7 @@ def send_test_email(to: str, subject: str, body: str) -> str:
 @pytest.mark.django_db
 def test_tool_registration():
     """register_tool adds functions to the registry."""
-    from django_ai_agent.registry import get_tool, list_tools, unregister_tool
+    from django_langgraph_agent.registry import get_tool, list_tools, unregister_tool
 
     register_tool(send_test_email)
     tools = list_tools()

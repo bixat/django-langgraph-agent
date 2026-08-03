@@ -1,5 +1,5 @@
 """
-django_ai_agent/models.py
+django_langgraph_agent/models.py
 
 Django models for django-langgraph-agent.
 
@@ -44,20 +44,20 @@ class AgentConfig(models.Model):
         blank=True,
         help_text=(
             "OpenRouter model ID to use (e.g. 'google/gemini-2.5-flash'). "
-            "Leave blank to use DJANGO_AI_AGENT['DEFAULT_MODEL']."
+            "Leave blank to use DJANGO_LANGGRAPH_AGENT['DEFAULT_MODEL']."
         ),
     )
     max_tokens = models.IntegerField(
         null=True,
         blank=True,
-        help_text="Max response tokens. Leave blank to use DJANGO_AI_AGENT['MAX_TOKENS'].",
+        help_text="Max response tokens. Leave blank to use DJANGO_LANGGRAPH_AGENT['MAX_TOKENS'].",
     )
     summary_threshold = models.IntegerField(
         null=True,
         blank=True,
         help_text=(
             "Number of messages before conversation is summarized. "
-            "Leave blank to use DJANGO_AI_AGENT['SUMMARY_THRESHOLD']."
+            "Leave blank to use DJANGO_LANGGRAPH_AGENT['SUMMARY_THRESHOLD']."
         ),
     )
     allowed_models = models.JSONField(

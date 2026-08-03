@@ -1,5 +1,5 @@
 """
-django_ai_agent/api_views.py
+django_langgraph_agent/api_views.py
 
 Built-in API views for agent SSE chat endpoints and Admin Chat Interface.
 """
@@ -116,7 +116,7 @@ def admin_chat_view(request):
             "agents": [],
             "error": "No active agents found. Create one in the Agent Configurations admin.",
         })
-        return render(request, "admin/django_ai_agent/chat.html", context)
+        return render(request, "admin/django_langgraph_agent/chat.html", context)
 
     agent_slug = request.GET.get("agent", "").strip()
     current_agent = agents.filter(name=agent_slug).first() or agents.first()
@@ -161,7 +161,7 @@ def admin_chat_view(request):
         "chat_history": chat_history,
     })
 
-    return render(request, "admin/django_ai_agent/chat.html", context)
+    return render(request, "admin/django_langgraph_agent/chat.html", context)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

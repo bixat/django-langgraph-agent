@@ -18,7 +18,7 @@ def make_tool_msg(tool_call_id, name="tool"):
 
 def test_valid_sequence_unchanged():
     """A correct sequence is returned unchanged."""
-    from django_ai_agent.sanitize import sanitize_messages_for_gemini
+    from django_langgraph_agent.sanitize import sanitize_messages_for_gemini
 
     ai_msg = make_ai_with_tool_calls([{"id": "1", "name": "get_data", "args": {}}])
     tool_msg = make_tool_msg("1", "get_data")
@@ -30,7 +30,7 @@ def test_valid_sequence_unchanged():
 
 def test_missing_tool_message_auto_filled():
     """Missing ToolMessages are auto-filled with synthetic placeholders."""
-    from django_ai_agent.sanitize import sanitize_messages_for_gemini
+    from django_langgraph_agent.sanitize import sanitize_messages_for_gemini
 
     ai_msg = make_ai_with_tool_calls([{"id": "abc", "name": "my_tool", "args": {}}])
     # No ToolMessage follows — should be auto-filled
@@ -43,7 +43,7 @@ def test_missing_tool_message_auto_filled():
 
 def test_orphan_tool_message_stripped():
     """Orphan ToolMessages not preceded by matching AIMessage are removed."""
-    from django_ai_agent.sanitize import sanitize_messages_for_gemini
+    from django_langgraph_agent.sanitize import sanitize_messages_for_gemini
 
     orphan = make_tool_msg("orphan-id")
     human = HumanMessage(content="hi")
@@ -55,7 +55,7 @@ def test_orphan_tool_message_stripped():
 
 def test_empty_ai_message_stripped():
     """Empty AIMessages (no content, no tool_calls) are removed."""
-    from django_ai_agent.sanitize import sanitize_messages_for_gemini
+    from django_langgraph_agent.sanitize import sanitize_messages_for_gemini
 
     empty_ai = AIMessage(content="")
     human = HumanMessage(content="hello")
@@ -67,7 +67,7 @@ def test_empty_ai_message_stripped():
 
 def test_system_and_human_always_kept():
     """SystemMessage and HumanMessage always pass through."""
-    from django_ai_agent.sanitize import sanitize_messages_for_gemini
+    from django_langgraph_agent.sanitize import sanitize_messages_for_gemini
 
     sys_msg = SystemMessage(content="You are an assistant.")
     human_msg = HumanMessage(content="Hello!")
@@ -78,7 +78,7 @@ def test_system_and_human_always_kept():
 
 def test_multiple_tool_calls_all_filled():
     """When an AI has multiple tool calls, all get ToolMessages."""
-    from django_ai_agent.sanitize import sanitize_messages_for_gemini
+    from django_langgraph_agent.sanitize import sanitize_messages_for_gemini
 
     ai_msg = make_ai_with_tool_calls([
         {"id": "tc1", "name": "tool_a", "args": {}},

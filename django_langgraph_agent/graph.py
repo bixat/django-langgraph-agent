@@ -1,5 +1,5 @@
 """
-django_ai_agent/graph.py
+django_langgraph_agent/graph.py
 
 Generic LangGraph agent graph factory.
 
@@ -106,9 +106,9 @@ def create_agent_graph(
         state_modifier:   Callable(state, config) → list[BaseMessage].
                           Injects the system prompt and any context messages.
         approval_tools:   Set of tool names that require user approval before
-                          execution. Defaults to DJANGO_AI_AGENT["APPROVAL_REQUIRED_TOOLS"].
+                          execution. Defaults to DJANGO_LANGGRAPH_AGENT["APPROVAL_REQUIRED_TOOLS"].
         summary_threshold: Message count that triggers summarization.
-                          Defaults to DJANGO_AI_AGENT["SUMMARY_THRESHOLD"].
+                          Defaults to DJANGO_LANGGRAPH_AGENT["SUMMARY_THRESHOLD"].
         label_builder:    Callable(tool_name, args) → str for human-readable labels.
         state_schema:     Custom TypedDict state class. Defaults to AgentState.
 

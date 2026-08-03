@@ -27,10 +27,10 @@ WHITELIST_SETTINGS = {
 @pytest.mark.django_db
 def test_get_model_schema_with_allowlist():
     """get_model_schema respects field allowlist."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import get_model_schema
+        from django_langgraph_agent.tools.django_orm import get_model_schema
 
         schema = get_model_schema.invoke({"model_name": "Product"})
         assert "name" in schema
@@ -43,10 +43,10 @@ def test_get_model_schema_with_allowlist():
 @pytest.mark.django_db
 def test_get_model_schema_with_exclude():
     """get_model_schema respects exclude_fields."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import get_model_schema
+        from django_langgraph_agent.tools.django_orm import get_model_schema
 
         schema = get_model_schema.invoke({"model_name": "Order"})
         assert "internal_notes" not in schema
@@ -55,10 +55,10 @@ def test_get_model_schema_with_exclude():
 @pytest.mark.django_db
 def test_model_not_in_whitelist_raises():
     """Querying a model not in whitelist raises a ValueError."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import query_records
+        from django_langgraph_agent.tools.django_orm import query_records
 
         result = query_records.invoke({
             "model_name": "User",  # Not in whitelist
@@ -70,10 +70,10 @@ def test_model_not_in_whitelist_raises():
 @pytest.mark.django_db
 def test_blocked_field_filter_rejected():
     """Filtering on a globally blocked substring (e.g. password) is rejected."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import query_records
+        from django_langgraph_agent.tools.django_orm import query_records
 
         result = query_records.invoke({
             "model_name": "Order",
@@ -86,10 +86,10 @@ def test_blocked_field_filter_rejected():
 @pytest.mark.django_db
 def test_excluded_field_filter_rejected():
     """Filtering on an excluded field is rejected."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import query_records
+        from django_langgraph_agent.tools.django_orm import query_records
 
         result = query_records.invoke({
             "model_name": "Order",
@@ -101,10 +101,10 @@ def test_excluded_field_filter_rejected():
 @pytest.mark.django_db
 def test_allowlist_field_filter_rejected():
     """Filtering on a non-allowlisted field is rejected."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import query_records
+        from django_langgraph_agent.tools.django_orm import query_records
 
         # Product allowlist does not include cost_price
         result = query_records.invoke({
@@ -119,13 +119,13 @@ def test_query_records_returns_data():
     """query_records returns matching serialized records."""
     from example_project.store.models import Product
 
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
 
         Product.objects.create(name="Widget", price=19.99, stock=10)
 
-        from django_ai_agent.tools.django_orm import query_records
+        from django_langgraph_agent.tools.django_orm import query_records
 
         result = query_records.invoke({
             "model_name": "Product",
@@ -138,10 +138,10 @@ def test_query_records_returns_data():
 @pytest.mark.django_db
 def test_add_record_creates_product():
     """add_record creates a record and returns serialized result."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import add_record
+        from django_langgraph_agent.tools.django_orm import add_record
 
         result = add_record.invoke({
             "model_name": "Product",
@@ -154,10 +154,10 @@ def test_add_record_creates_product():
 @pytest.mark.django_db
 def test_add_record_blocked_field_rejected():
     """add_record fails when trying to set a blocked field."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import add_record
+        from django_langgraph_agent.tools.django_orm import add_record
 
         result = add_record.invoke({
             "model_name": "Order",
@@ -171,13 +171,13 @@ def test_update_record():
     """update_record successfully updates an existing record."""
     from example_project.store.models import Product
 
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
 
         product = Product.objects.create(name="Old Name", price=9.99, stock=5)
 
-        from django_ai_agent.tools.django_orm import update_record
+        from django_langgraph_agent.tools.django_orm import update_record
 
         result = update_record.invoke({
             "model_name": "Product",
@@ -196,14 +196,14 @@ def test_aggregate_model_records():
     """aggregate_model_records computes count, avg, and sum aggregates correctly."""
     from example_project.store.models import Product
 
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
 
         Product.objects.create(name="P1", price=10.00, stock=5)
         Product.objects.create(name="P2", price=20.00, stock=15)
 
-        from django_ai_agent.tools.django_orm import aggregate_model_records
+        from django_langgraph_agent.tools.django_orm import aggregate_model_records
 
         result = aggregate_model_records.invoke({
             "model_name": "Product",
@@ -217,10 +217,10 @@ def test_aggregate_model_records():
 @pytest.mark.django_db
 def test_agent_blocked_fields_enforced():
     """Per-agent blocked_fields passed via runnable config are strictly enforced across schema, query, and write tools."""
-    with override_settings(DJANGO_AI_AGENT=WHITELIST_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=WHITELIST_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent.tools.django_orm import (
+        from django_langgraph_agent.tools.django_orm import (
             get_model_schema,
             query_records,
             add_record,

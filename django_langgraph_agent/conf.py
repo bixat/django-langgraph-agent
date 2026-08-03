@@ -1,5 +1,5 @@
 """
-django_ai_agent/conf.py
+django_langgraph_agent/conf.py
 
 Settings reader for django-langgraph-agent.
 """
@@ -14,7 +14,7 @@ DEFAULTS = {
     "MAX_TOKENS": 800,
     "SUMMARY_THRESHOLD": 4,
     "SITE_URL": "https://example.com",
-    "SITE_TITLE": "Django AI Agent",
+    "SITE_TITLE": "Django LangGraph Agent",
     "APPROVAL_REQUIRED_TOOLS": [],
     "MODEL_WHITELIST": {},
     "BLOCKED_FIELD_SUBSTRINGS": ["password", "token", "secret", "is_superuser", "is_staff"],
@@ -24,7 +24,7 @@ DEFAULTS = {
 
 class _AgentSettings:
     """
-    Lazy proxy that reads DJANGO_AI_AGENT from Django settings,
+    Lazy proxy that reads DJANGO_LANGGRAPH_AGENT (or DJANGO_AI_AGENT) from Django settings,
     merging with DEFAULTS. Attribute access is cached after first read.
     """
 
@@ -32,7 +32,9 @@ class _AgentSettings:
         self._cache = {}
 
     def _load(self):
-        user_conf = getattr(django_settings, "DJANGO_AI_AGENT", {})
+        user_conf = getattr(django_settings, "DJANGO_LANGGRAPH_AGENT", None)
+        if user_conf is None:
+            user_conf = getattr(django_settings, "DJANGO_AI_AGENT", {})
         merged = {**DEFAULTS, **user_conf}
         self._cache = merged
 
@@ -50,3 +52,4 @@ class _AgentSettings:
 
 
 agent_settings = _AgentSettings()
+

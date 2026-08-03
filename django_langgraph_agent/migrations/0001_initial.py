@@ -1,5 +1,5 @@
 """
-django_ai_agent/migrations/0001_initial.py
+django_langgraph_agent/migrations/0001_initial.py
 """
 
 from django.conf import settings
@@ -46,7 +46,7 @@ class Migration(migrations.Migration):
                 ("thread_id", models.CharField(help_text="Unique thread identifier string.", max_length=200, primary_key=True, serialize=False)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
-                ("agent", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="threads", to="django_ai_agent.agentconfig")),
+                ("agent", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="threads", to="django_langgraph_agent.agentconfig")),
                 ("user", models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name="ai_threads", to=settings.AUTH_USER_MODEL)),
             ],
             options={
@@ -63,7 +63,7 @@ class Migration(migrations.Migration):
                 ("is_user", models.BooleanField(help_text="True for user messages, False for AI responses.")),
                 ("model_name", models.CharField(blank=True, default="", max_length=200)),
                 ("created_at", models.DateTimeField(auto_now_add=True)),
-                ("thread", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="messages", to="django_ai_agent.chatthread")),
+                ("thread", models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name="messages", to="django_langgraph_agent.chatthread")),
             ],
             options={
                 "verbose_name": "Chat Message",

@@ -8,8 +8,8 @@ Two agents are defined here:
   2. store_admin_agent — admin agent with full CRUD + approval flow
 """
 
-from django_ai_agent import DjangoAgent
-from django_ai_agent.tools import DjangoORMToolkit
+from django_langgraph_agent import DjangoAgent
+from django_langgraph_agent.tools import DjangoORMToolkit
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Customer-Facing Agent (read-only)

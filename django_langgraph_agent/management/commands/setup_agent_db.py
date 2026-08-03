@@ -1,8 +1,8 @@
 """
-django_ai_agent management command: setup_agent_db
+django_langgraph_agent management command: setup_agent_db
 
 Creates the LangGraph checkpoint tables in the database.
-Run this after adding django_ai_agent to INSTALLED_APPS and running migrations.
+Run this after adding django_langgraph_agent to INSTALLED_APPS and running migrations.
 
 Usage:
     python manage.py setup_agent_db
@@ -27,7 +27,7 @@ class Command(BaseCommand):
         agent_name = options["agent"]
         self.stdout.write(f"Setting up LangGraph checkpoint tables for agent '{agent_name}'...")
 
-        from django_ai_agent.checkpointer import setup_checkpointer
+        from django_langgraph_agent.checkpointer import setup_checkpointer
 
         try:
             setup_checkpointer(agent_name)

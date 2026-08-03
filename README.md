@@ -14,7 +14,7 @@ Battle-tested in internal workflows at [Tathbeet](https://tathbeet.space) — a 
 ## Features
 
 - ⚙️ **Admin-Managed Agents** — create and customize agents from the Django Admin UI without code changes
-- 🔌 **Zero-Boilerplate API** — built-in SSE chat & approval endpoints ready out-of-the-box (`include("django_ai_agent.urls")`)
+- 🔌 **Zero-Boilerplate API** — built-in SSE chat & approval endpoints ready out-of-the-box (`include("django_langgraph_agent.urls")`)
 - 🧰 **Auto-Included ORM Tools** — safe CRUD tools automatically attached and configured via `MODEL_WHITELIST` in `settings.py`
 - 🎯 **Tool Registry (`@register_tool`)** — easily add custom tools (e.g. notifications, emails, external integrations)
 - ⚡ **Streaming SSE** — yields real-time `token`, `tool_approval`, `done`, and `error` events
@@ -44,7 +44,7 @@ pip install django-langgraph-agent[postgres]
 ```python
 INSTALLED_APPS = [
     ...
-    "django_ai_agent",
+    "django_langgraph_agent",
 ]
 ```
 
@@ -55,14 +55,14 @@ from django.urls import path, include
 
 urlpatterns = [
     # Adds endpoints: GET /api/agent/, POST /api/agent/chat/, POST /api/agent/chat/approve/
-    path("api/agent/", include("django_ai_agent.urls")),
+    path("api/agent/", include("django_langgraph_agent.urls")),
 ]
 ```
 
 ### 3. Configure `settings.py`
 
 ```python
-DJANGO_AI_AGENT = {
+DJANGO_LANGGRAPH_AGENT = {
     "OPENROUTER_API_KEY": env("OPENROUTER_API_KEY"),
 
     # LLM configuration (OpenRouter model IDs)
@@ -94,7 +94,7 @@ python manage.py setup_agent_db
 
 ### 5. Create an Agent in Django Admin
 
-Navigate to `/admin/django_ai_agent/agentconfig/add/`:
+Navigate to `/admin/django_langgraph_agent/agentconfig/add/`:
 - **Name**: `support`
 - **Display Name**: `Customer Support Agent`
 - **System Prompt**: `You are a helpful store assistant. Use {user_id} and {date} context.`
@@ -110,7 +110,7 @@ To add external integrations (push notifications, emails, third-party APIs):
 ```python
 # myapp/tools.py
 from langchain_core.tools import tool
-from django_ai_agent import register_tool
+from django_langgraph_agent import register_tool
 
 @register_tool
 @tool
@@ -184,8 +184,8 @@ Resume execution after the user approves or denies a tool call.
 If you prefer defining agents directly in Python code instead of Django Admin:
 
 ```python
-from django_ai_agent import DjangoAgent, stream_agent
-from django_ai_agent.tools import DjangoORMToolkit
+from django_langgraph_agent import DjangoAgent, stream_agent
+from django_langgraph_agent.tools import DjangoORMToolkit
 
 toolkit = DjangoORMToolkit(include_write=True)
 

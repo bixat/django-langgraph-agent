@@ -1,5 +1,5 @@
 """
-django_ai_agent/checkpointer.py
+django_langgraph_agent/checkpointer.py
 
 Auto-detecting LangGraph checkpointer singleton.
 

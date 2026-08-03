@@ -1,5 +1,5 @@
 """
-django_ai_agent/agent.py
+django_langgraph_agent/agent.py
 
 The main DjangoAgent interface for django-langgraph-agent.
 """

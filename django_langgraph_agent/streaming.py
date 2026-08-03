@@ -1,5 +1,5 @@
 """
-django_ai_agent/streaming.py
+django_langgraph_agent/streaming.py
 
 Streaming SSE generator functions for django-langgraph-agent.
 

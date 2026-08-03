@@ -1,5 +1,5 @@
 """
-django_ai_agent/admin.py
+django_langgraph_agent/admin.py
 
 Rich Django Admin for managing AI agents, threads, and messages (with Unfold support).
 Features Autocomplete Multi-Select for Whitelisted Django Models and Blocked Fields.
@@ -31,7 +31,7 @@ def _get_all_django_models():
     models_list = []
     for model_cls in apps.get_models():
         app_label = model_cls._meta.app_label
-        if app_label in ("django_ai_agent", "admin", "sessions", "contenttypes"):
+        if app_label in ("django_langgraph_agent", "django_ai_agent", "admin", "sessions", "contenttypes"):
             continue
         label = f"{app_label}.{model_cls._meta.object_name}"
         display = f"{app_label} | {model_cls._meta.verbose_name.title()} ({model_cls._meta.object_name})"
@@ -44,7 +44,7 @@ def _get_all_model_fields():
     fields_set = set()
     for model_cls in apps.get_models():
         app_label = model_cls._meta.app_label
-        if app_label in ("django_ai_agent", "admin", "sessions", "contenttypes"):
+        if app_label in ("django_langgraph_agent", "django_ai_agent", "admin", "sessions", "contenttypes"):
             continue
         for f in model_cls._meta.get_fields():
             if hasattr(f, "name"):
@@ -499,7 +499,7 @@ class ChatMessageAdmin(ModelAdmin):
     @admin.display(description="Thread")
     def thread_link(self, obj):
         return format_html(
-            '<a href="/admin/django_ai_agent/chatthread/{}/change/">{}</a>',
+            '<a href="/admin/django_langgraph_agent/chatthread/{}/change/">{}</a>',
             obj.thread_id,
             obj.thread.thread_id[:20],
         )

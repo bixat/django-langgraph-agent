@@ -15,7 +15,7 @@ from django.http import JsonResponse, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from django_ai_agent import resume_agent, stream_agent
+from django_langgraph_agent import resume_agent, stream_agent
 
 from .agents import store_admin_agent, store_agent
 

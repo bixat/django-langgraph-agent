@@ -27,7 +27,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     
-    "django_ai_agent",
+    "django_langgraph_agent",
     "example_project.store",  # Our example store app
 ]
 
@@ -41,7 +41,7 @@ DATABASES = {
 # ──────────────────────────────────────────────────────────────────────────────
 # django-langgraph-agent Configuration
 # ──────────────────────────────────────────────────────────────────────────────
-DJANGO_AI_AGENT = {
+DJANGO_LANGGRAPH_AGENT = {
     "OPENROUTER_API_KEY": "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",
     "DEFAULT_MODEL": "google/gemini-2.5-flash-preview",
     "FALLBACK_MODELS": [
@@ -101,17 +101,17 @@ UNFOLD = {
                     {
                         "title": "Agent Configurations",
                         "icon": "smart_toy",
-                        "link": lambda request: "/admin/django_ai_agent/agentconfig/",
+                        "link": lambda request: "/admin/django_langgraph_agent/agentconfig/",
                     },
                     {
                         "title": "Chat Threads",
                         "icon": "chat",
-                        "link": lambda request: "/admin/django_ai_agent/chatthread/",
+                        "link": lambda request: "/admin/django_langgraph_agent/chatthread/",
                     },
                     {
                         "title": "Chat Messages Log",
                         "icon": "chat_bubble",
-                        "link": lambda request: "/admin/django_ai_agent/chatmessage/",
+                        "link": lambda request: "/admin/django_langgraph_agent/chatmessage/",
                     },
                 ],
             },
@@ -173,6 +173,6 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler"}},
     "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {
-        "django_ai_agent": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
+        "django_langgraph_agent": {"handlers": ["console"], "level": "DEBUG", "propagate": False},
     },
 }

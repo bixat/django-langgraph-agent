@@ -1,13 +1,13 @@
 """
-django_ai_agent/llm.py
+django_langgraph_agent/llm.py
 
 LLM factory for django-langgraph-agent.
 
 Builds a ChatOpenAI instance pointing at OpenRouter with an automatic
 multi-model fallback chain and connection retry logic.
 
-  Primary → model or DJANGO_AI_AGENT["DEFAULT_MODEL"]
-  Fallback → DJANGO_AI_AGENT["FALLBACK_MODELS"] in order
+  Primary → model or DJANGO_LANGGRAPH_AGENT["DEFAULT_MODEL"]
+  Fallback → DJANGO_LANGGRAPH_AGENT["FALLBACK_MODELS"] in order
 """
 
 import logging
@@ -26,9 +26,9 @@ def build_llm(model: str | None = None, title: str | None = None, max_tokens: in
     Args:
         model:      Optional model string override (e.g. 'google/gemini-2.5-flash').
         title:      HTTP-Referer / X-Title header sent to OpenRouter.
-                    Defaults to DJANGO_AI_AGENT["SITE_TITLE"].
+                    Defaults to DJANGO_LANGGRAPH_AGENT["SITE_TITLE"].
         max_tokens: Max tokens for the response.
-                    Defaults to DJANGO_AI_AGENT["MAX_TOKENS"].
+                    Defaults to DJANGO_LANGGRAPH_AGENT["MAX_TOKENS"].
 
     Returns:
         A ChatOpenAI instance (or a chained fallback wrapper).
@@ -42,7 +42,7 @@ def build_llm(model: str | None = None, title: str | None = None, max_tokens: in
     if not api_key:
         raise ValueError(
             "OPENROUTER_API_KEY is not configured. "
-            "Add it to DJANGO_AI_AGENT['OPENROUTER_API_KEY'] in your settings."
+            "Add it to DJANGO_LANGGRAPH_AGENT['OPENROUTER_API_KEY'] in your settings."
         )
 
     site_title = title or agent_settings.SITE_TITLE
@@ -78,7 +78,7 @@ def build_llm(model: str | None = None, title: str | None = None, max_tokens: in
 def build_summarizer_llm():
     """
     Builds a lightweight LLM used only for conversation summarization.
-    Uses DJANGO_AI_AGENT["SUMMARIZER_MODEL"] (defaults to deepseek-chat).
+    Uses DJANGO_LANGGRAPH_AGENT["SUMMARIZER_MODEL"].
     """
     from langchain_openai import ChatOpenAI
 

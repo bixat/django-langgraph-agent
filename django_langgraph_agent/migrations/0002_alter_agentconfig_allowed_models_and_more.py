@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('django_ai_agent', '0001_initial'),
+        ('django_langgraph_agent', '0001_initial'),
     ]
 
     operations = [
@@ -38,12 +38,12 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='agentconfig',
             name='max_tokens',
-            field=models.IntegerField(blank=True, help_text="Max response tokens. Leave blank to use DJANGO_AI_AGENT['MAX_TOKENS'].", null=True),
+            field=models.IntegerField(blank=True, help_text="Max response tokens. Leave blank to use DJANGO_LANGGRAPH_AGENT['MAX_TOKENS'].", null=True),
         ),
         migrations.AlterField(
             model_name='agentconfig',
             name='model_name',
-            field=models.CharField(blank=True, help_text="OpenRouter model ID to use (e.g. 'google/gemini-2.5-flash'). Leave blank to use DJANGO_AI_AGENT['DEFAULT_MODEL'].", max_length=200),
+            field=models.CharField(blank=True, help_text="OpenRouter model ID to use (e.g. 'google/gemini-2.5-flash'). Leave blank to use DJANGO_LANGGRAPH_AGENT['DEFAULT_MODEL'].", max_length=200),
         ),
         migrations.AlterField(
             model_name='agentconfig',
@@ -53,7 +53,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='agentconfig',
             name='summary_threshold',
-            field=models.IntegerField(blank=True, help_text="Number of messages before conversation is summarized. Leave blank to use DJANGO_AI_AGENT['SUMMARY_THRESHOLD'].", null=True),
+            field=models.IntegerField(blank=True, help_text="Number of messages before conversation is summarized. Leave blank to use DJANGO_LANGGRAPH_AGENT['SUMMARY_THRESHOLD'].", null=True),
         ),
         migrations.AlterField(
             model_name='agentconfig',

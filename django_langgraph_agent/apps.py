@@ -1,5 +1,5 @@
 """
-django_ai_agent/apps.py
+django_langgraph_agent/apps.py
 
 Django AppConfig for django-langgraph-agent.
 
@@ -15,9 +15,9 @@ from django.apps import AppConfig
 logger = logging.getLogger(__name__)
 
 
-class DjangoAIAgentConfig(AppConfig):
-    name = "django_ai_agent"
-    verbose_name = "Django AI Agent"
+class DjangoLangGraphAgentConfig(AppConfig):
+    name = "django_langgraph_agent"
+    verbose_name = "Django LangGraph Agent"
     default_auto_field = "django.db.models.BigAutoField"
 
     def ready(self):
@@ -30,10 +30,11 @@ class DjangoAIAgentConfig(AppConfig):
         if not agent_settings.OPENROUTER_API_KEY:
             logger.warning(
                 "django-langgraph-agent: OPENROUTER_API_KEY is not set in "
-                "DJANGO_AI_AGENT settings. Agents will fail at runtime."
+                "DJANGO_LANGGRAPH_AGENT settings. Agents will fail at runtime."
             )
 
     def _register_builtin_tools(self):
         """Auto-register the 4 built-in ORM tools so they appear in admin."""
         from .registry import _register_builtin_tools
         _register_builtin_tools()
+

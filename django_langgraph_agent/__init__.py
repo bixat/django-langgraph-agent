@@ -1,11 +1,11 @@
 """
-django_ai_agent — Django AI Agent Package
+django_langgraph_agent — Django LangGraph Agent Package
 
 A reusable Django package for building streaming AI agents powered by
 LangGraph and OpenRouter.
 """
 
-default_app_config = "django_ai_agent.apps.DjangoAIAgentConfig"
+default_app_config = "django_langgraph_agent.apps.DjangoLangGraphAgentConfig"
 
 from .agent import DjangoAgent
 from .conf import agent_settings
@@ -24,3 +24,4 @@ __all__ = [
 ]
 
 __version__ = "0.1.0"
+

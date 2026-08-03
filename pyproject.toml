@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-langgraph-agent"
-version = "0.1.0"
+version = "0.1.1"
 description = "A reusable Django package for building streaming AI agents with LangGraph and OpenRouter"
 readme = "README.md"
 license = { text = "MIT" }
@@ -54,10 +54,10 @@ Issues = "https://github.com/tathbeet/django-langgraph-agent/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["django_ai_agent*"]
+include = ["django_langgraph_agent*"]
 
 [tool.setuptools.package-data]
-"django_ai_agent" = ["templates/**/*", "static/**/*"]
+"django_langgraph_agent" = ["templates/**/*", "static/**/*"]
 
 
 [tool.black]

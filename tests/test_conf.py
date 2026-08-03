@@ -10,10 +10,10 @@ from django.test import override_settings
 
 @pytest.mark.django_db
 def test_defaults_applied():
-    """When DJANGO_AI_AGENT settings are cleared, defaults are used."""
-    from django_ai_agent.conf import _AgentSettings
+    """When DJANGO_LANGGRAPH_AGENT settings are cleared, defaults are used."""
+    from django_langgraph_agent.conf import _AgentSettings
 
-    with override_settings(DJANGO_AI_AGENT={}):
+    with override_settings(DJANGO_LANGGRAPH_AGENT={}, DJANGO_AI_AGENT=None):
         settings_obj = _AgentSettings()
         settings_obj.reload()
 
@@ -25,10 +25,10 @@ def test_defaults_applied():
 @pytest.mark.django_db
 def test_user_settings_override():
     """User settings override defaults."""
-    from django_ai_agent.conf import _AgentSettings
+    from django_langgraph_agent.conf import _AgentSettings
 
     with override_settings(
-        DJANGO_AI_AGENT={
+        DJANGO_LANGGRAPH_AGENT={
             "OPENROUTER_API_KEY": "test-key",
             "MAX_TOKENS": 1200,
             "APPROVAL_REQUIRED_TOOLS": ["add_record"],
@@ -46,10 +46,10 @@ def test_user_settings_override():
 @pytest.mark.django_db
 def test_model_whitelist_config():
     """MODEL_WHITELIST is properly read."""
-    from django_ai_agent.conf import _AgentSettings
+    from django_langgraph_agent.conf import _AgentSettings
 
     with override_settings(
-        DJANGO_AI_AGENT={
+        DJANGO_LANGGRAPH_AGENT={
             "OPENROUTER_API_KEY": "test-key",
             "MODEL_WHITELIST": {
                 "Product": {
@@ -66,3 +66,4 @@ def test_model_whitelist_config():
         assert "Product" in whitelist
         assert whitelist["Product"]["app_label"] == "store"
         assert whitelist["Product"]["fields"] == ["name", "price"]
+

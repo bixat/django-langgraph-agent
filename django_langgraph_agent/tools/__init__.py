@@ -1,4 +1,4 @@
-from django_ai_agent.tools.django_orm import (
+from django_langgraph_agent.tools.django_orm import (
     DjangoORMToolkit,
     add_record,
     get_model_schema,
@@ -13,3 +13,4 @@ __all__ = [
     "add_record",
     "update_record",
 ]
+

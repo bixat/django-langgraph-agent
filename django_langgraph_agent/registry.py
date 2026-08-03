@@ -1,5 +1,5 @@
 """
-django_ai_agent/registry.py
+django_langgraph_agent/registry.py
 
 Global tool registry for django-langgraph-agent.
 
@@ -11,7 +11,7 @@ Usage
 -----
     # In your app (e.g. myapp/tools.py), decorate tools with @register_tool:
 
-    from django_ai_agent import register_tool
+    from django_langgraph_agent import register_tool
     from langchain_core.tools import tool
 
     @register_tool          # <-- registers it
@@ -96,7 +96,7 @@ def _register_builtin_tools():
     without the developer needing to call register_tool manually.
     """
     try:
-        from django_ai_agent.tools.django_orm import (
+        from django_langgraph_agent.tools.django_orm import (
             get_model_schema,
             query_records,
             aggregate_model_records,

@@ -16,7 +16,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "example_project.settings")
 django.setup()
 
 from django.contrib.auth import get_user_model
-from django_ai_agent.models import AgentConfig
+from django_langgraph_agent.models import AgentConfig
 from example_project.store.models import Order, Product
 
 

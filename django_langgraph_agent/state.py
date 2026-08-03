@@ -1,5 +1,5 @@
 """
-django_ai_agent/state.py
+django_langgraph_agent/state.py
 
 Generic LangGraph state for all agents built with this package.
 
@@ -9,7 +9,7 @@ can never spoof them.
 
 Custom agents can extend AgentState with additional fields:
 
-    from django_ai_agent.state import AgentState
+    from django_langgraph_agent.state import AgentState
     from typing import Optional
 
     class MyAgentState(AgentState):

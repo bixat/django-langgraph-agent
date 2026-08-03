@@ -1,5 +1,5 @@
 """
-django_ai_agent/urls.py
+django_langgraph_agent/urls.py
 
 Built-in URL patterns for django-langgraph-agent.
 """
@@ -8,7 +8,7 @@ from django.urls import path
 
 from .api_views import admin_chat_view, approve_view, chat_view, delete_thread_view, list_agents_view
 
-app_name = "django_ai_agent"
+app_name = "django_langgraph_agent"
 
 urlpatterns = [
     path("", list_agents_view, name="list_agents"),
@@ -17,3 +17,4 @@ urlpatterns = [
     path("chat/approve/", approve_view, name="approve"),
     path("chat/delete/", delete_thread_view, name="delete_thread"),
 ]
+

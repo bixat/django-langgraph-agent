@@ -1,5 +1,5 @@
 """
-django_ai_agent/sanitize.py
+django_langgraph_agent/sanitize.py
 
 Sanitizes LangChain message sequences to comply with Google Gemini's
 strict turn rules. This is applied automatically by the agent graph

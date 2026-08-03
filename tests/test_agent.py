@@ -32,10 +32,10 @@ def hello_tool(name: str) -> str:
 
 def test_agent_repr():
     """DjangoAgent repr is informative."""
-    with override_settings(DJANGO_AI_AGENT=AGENT_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent import DjangoAgent
+        from django_langgraph_agent import DjangoAgent
 
         agent = DjangoAgent(
             name="test_agent",
@@ -49,10 +49,10 @@ def test_agent_repr():
 
 def test_agent_thread_id_namespaced():
     """Thread IDs are namespaced with the agent name."""
-    with override_settings(DJANGO_AI_AGENT=AGENT_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent import DjangoAgent
+        from django_langgraph_agent import DjangoAgent
 
         agent = DjangoAgent(
             name="my_agent",
@@ -64,10 +64,10 @@ def test_agent_thread_id_namespaced():
 
 def test_callable_system_prompt():
     """Callable system_prompt is used as-is as state_modifier."""
-    with override_settings(DJANGO_AI_AGENT=AGENT_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent import DjangoAgent
+        from django_langgraph_agent import DjangoAgent
         from langchain_core.messages import SystemMessage
 
         def my_modifier(state, config):
@@ -86,10 +86,10 @@ def test_callable_system_prompt():
 
 def test_string_system_prompt_includes_summary():
     """String system_prompt includes conversation summary when available."""
-    with override_settings(DJANGO_AI_AGENT=AGENT_SETTINGS):
-        from django_ai_agent.conf import agent_settings
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent import DjangoAgent
+        from django_langgraph_agent import DjangoAgent
 
         agent = DjangoAgent(
             name="sum_agent",
@@ -106,14 +106,14 @@ def test_string_system_prompt_includes_summary():
 
 
 def test_approval_tools_defaults_from_settings():
-    """approval_tools defaults to DJANGO_AI_AGENT['APPROVAL_REQUIRED_TOOLS']."""
-    with override_settings(DJANGO_AI_AGENT={
+    """approval_tools defaults to DJANGO_LANGGRAPH_AGENT['APPROVAL_REQUIRED_TOOLS']."""
+    with override_settings(DJANGO_LANGGRAPH_AGENT={
         **AGENT_SETTINGS,
         "APPROVAL_REQUIRED_TOOLS": ["add_record", "update_record"],
     }):
-        from django_ai_agent.conf import agent_settings
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent import DjangoAgent
+        from django_langgraph_agent import DjangoAgent
 
         agent = DjangoAgent(
             name="approval_agent",
@@ -126,13 +126,13 @@ def test_approval_tools_defaults_from_settings():
 
 def test_approval_tools_can_be_overridden():
     """approval_tools can be explicitly overridden at agent construction."""
-    with override_settings(DJANGO_AI_AGENT={
+    with override_settings(DJANGO_LANGGRAPH_AGENT={
         **AGENT_SETTINGS,
         "APPROVAL_REQUIRED_TOOLS": ["add_record"],
     }):
-        from django_ai_agent.conf import agent_settings
+        from django_langgraph_agent.conf import agent_settings
         agent_settings.reload()
-        from django_ai_agent import DjangoAgent
+        from django_langgraph_agent import DjangoAgent
 
         agent = DjangoAgent(
             name="override_agent",
