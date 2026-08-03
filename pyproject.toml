@@ -47,10 +47,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/tathbeet/django-langgraph-agent"
-Documentation = "https://github.com/tathbeet/django-langgraph-agent#readme"
-Repository = "https://github.com/tathbeet/django-langgraph-agent"
-Issues = "https://github.com/tathbeet/django-langgraph-agent/issues"
+Homepage = "https://github.com/bixat/django-langgraph-agent"
+Documentation = "https://github.com/bixat/django-langgraph-agent#readme"
+Repository = "https://github.com/bixat/django-langgraph-agent"
+Issues = "https://github.com/bixat/django-langgraph-agent/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]

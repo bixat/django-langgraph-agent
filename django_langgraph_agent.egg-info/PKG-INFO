@@ -4,10 +4,10 @@ Version: 0.1.0
 Summary: A reusable Django package for building streaming AI agents with LangGraph and OpenRouter
 Author: Mohammed chahboun
 License: MIT
-Project-URL: Homepage, https://github.com/tathbeet/django-langgraph-agent
-Project-URL: Documentation, https://github.com/tathbeet/django-langgraph-agent#readme
-Project-URL: Repository, https://github.com/tathbeet/django-langgraph-agent
-Project-URL: Issues, https://github.com/tathbeet/django-langgraph-agent/issues
+Project-URL: Homepage, https://github.com/bixat/django-langgraph-agent
+Project-URL: Documentation, https://github.com/bixat/django-langgraph-agent#readme
+Project-URL: Repository, https://github.com/bixat/django-langgraph-agent
+Project-URL: Issues, https://github.com/bixat/django-langgraph-agent/issues
 Keywords: django,ai,agent,langgraph,llm,openrouter,streaming,sse
 Classifier: Development Status :: 3 - Alpha
 Classifier: Environment :: Web Environment
