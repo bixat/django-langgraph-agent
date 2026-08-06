@@ -48,7 +48,7 @@ def stream_agent(
     Streams an AI agent response as Server-Sent Events.
     """
     full_ai_message = ""
-    detected_model_name = None
+    detected_model_name = getattr(agent, "model_name", None) or getattr(agent_settings, "DEFAULT_MODEL", "")
 
     try:
         graph = agent.get_graph()
@@ -74,9 +74,15 @@ def stream_agent(
         ):
             if event_type == "messages":
                 chunk, metadata = event_data
+                
+                # Prevent internal summarizer LLM outputs from streaming to the user
+                if metadata.get("langgraph_node") == "summarize":
+                    continue
+
                 model_name = (
                     metadata.get("ls_model_name")
                     or metadata.get("model_name")
+                    or getattr(agent, "model_name", None)
                     or getattr(agent_settings, "DEFAULT_MODEL", "")
                 )
                 if model_name:
@@ -135,7 +141,7 @@ def stream_approval_resume(
     Executes approved tool calls and feeds real execution results back to the LLM.
     """
     full_ai_message = ""
-    detected_model_name = None
+    detected_model_name = getattr(agent, "model_name", None) or getattr(agent_settings, "DEFAULT_MODEL", "")
 
     try:
         graph = agent.get_graph()
@@ -204,9 +210,15 @@ def stream_approval_resume(
         ):
             if event_type == "messages":
                 chunk, metadata = event_data
+
+                # Prevent internal summarizer LLM outputs from streaming to the user
+                if metadata.get("langgraph_node") == "summarize":
+                    continue
+
                 model_name = (
                     metadata.get("ls_model_name")
                     or metadata.get("model_name")
+                    or getattr(agent, "model_name", None)
                     or getattr(agent_settings, "DEFAULT_MODEL", "")
                 )
                 if model_name:

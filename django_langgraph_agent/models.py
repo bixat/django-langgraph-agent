@@ -144,7 +144,7 @@ class AgentConfig(models.Model):
             name=self.name,
             system_prompt=self.system_prompt,
             tools=self.get_all_tools(),
-            model_name=self.model_name or None,
+            model_name=self.model_name.strip() if self.model_name else None,
             max_tokens=self.max_tokens,
             summary_threshold=self.summary_threshold,
             approval_tools=self.get_all_approval_tools(),

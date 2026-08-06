@@ -254,9 +254,9 @@ def create_agent_graph(
 
     # Routing
     workflow.add_conditional_edges("agent", router, ["execute_tools", END])
-    workflow.add_edge("execute_tools", "summarize")
     workflow.add_conditional_edges(
-        "summarize", should_summarize, {"summarize": "summarize", "continue": "agent"}
+        "execute_tools", should_summarize, {"summarize": "summarize", "continue": "agent"}
     )
+    workflow.add_edge("summarize", "agent")
 
     return workflow

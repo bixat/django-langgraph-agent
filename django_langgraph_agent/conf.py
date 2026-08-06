@@ -8,9 +8,9 @@ from django.conf import settings as django_settings
 
 DEFAULTS = {
     "OPENROUTER_API_KEY": None,
-    "DEFAULT_MODEL": "google/gemini-2.5-flash",
+    "DEFAULT_MODEL": "google/gemini-3.5-flash-lite",
     "FALLBACK_MODELS": ["google/gemini-2.0-flash-001", "openai/gpt-4o-mini"],
-    "SUMMARIZER_MODEL": "google/gemini-2.5-flash",
+    "SUMMARIZER_MODEL": "google/gemini-3.5-flash-lite",
     "MAX_TOKENS": 800,
     "SUMMARY_THRESHOLD": 4,
     "SITE_URL": "https://example.com",

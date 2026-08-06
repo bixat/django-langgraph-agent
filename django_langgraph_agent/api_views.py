@@ -27,19 +27,34 @@ logger = logging.getLogger(__name__)
 _AGENT_CACHE: dict = {}
 
 
+def clear_agent_cache():
+    """Clears all cached DjangoAgent instances."""
+    _AGENT_CACHE.clear()
+    logger.info("Cleared _AGENT_CACHE.")
+
+
 def _get_or_build_agent(agent_config):
     """
     Returns a cached DjangoAgent for this config, rebuilding if config changed.
     """
-    cache_key = (agent_config.pk, agent_config.updated_at.isoformat())
+    cache_key = (
+        agent_config.pk,
+        agent_config.updated_at.isoformat(),
+        agent_config.model_name,
+        agent_config.system_prompt,
+        tuple(agent_config.allowed_models or []),
+        tuple(agent_config.blocked_fields or []),
+        tuple(agent_config.extra_tools or []),
+        tuple(agent_config.extra_approval_tools or []),
+    )
     if cache_key not in _AGENT_CACHE:
         old_keys = [k for k in _AGENT_CACHE if k[0] == agent_config.pk]
         for k in old_keys:
             del _AGENT_CACHE[k]
         _AGENT_CACHE[cache_key] = agent_config.to_django_agent()
         logger.info(
-            "Built DjangoAgent '%s' from DB config (pk=%s, updated=%s)",
-            agent_config.name, agent_config.pk, agent_config.updated_at,
+            "Built DjangoAgent '%s' from DB config (pk=%s, model=%s, updated=%s)",
+            agent_config.name, agent_config.pk, agent_config.model_name, agent_config.updated_at,
         )
     return _AGENT_CACHE[cache_key]
 
@@ -203,7 +218,7 @@ def chat_view(request):
         _captured["text"] += text
 
     def on_done(full_text: str, extra: dict):
-        _captured["model"] = extra.get("model_name", "")
+        _captured["model"] = extra.get("model_name") or getattr(agent, "model_name", None) or getattr(agent_settings, "DEFAULT_MODEL", "")
         _persist_message(
             agent_config, thread_id, full_text,
             is_user=False, model_name=_captured["model"], user_id=user_id,
@@ -260,9 +275,10 @@ def approve_view(request):
 
     def on_done(full_text: str, extra: dict):
         if full_text:
+            model_name = extra.get("model_name") or getattr(agent, "model_name", None) or getattr(agent_settings, "DEFAULT_MODEL", "")
             _persist_message(
                 agent_config, thread_id, full_text,
-                is_user=False, model_name=extra.get("model_name", ""), user_id=user_id,
+                is_user=False, model_name=model_name, user_id=user_id,
             )
 
     gen = resume_agent(

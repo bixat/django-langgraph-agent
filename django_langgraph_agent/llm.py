@@ -63,7 +63,7 @@ def build_llm(model: str | None = None, title: str | None = None, max_tokens: in
             },
         )
 
-    primary_model = model or agent_settings.DEFAULT_MODEL
+    primary_model = model.strip() if (model and isinstance(model, str) and model.strip()) else agent_settings.DEFAULT_MODEL
     primary = _make(primary_model)
     fallbacks = [_make(m) for m in agent_settings.FALLBACK_MODELS if m != primary_model]
 

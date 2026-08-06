@@ -8,6 +8,11 @@ import os
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
+try:
+    from dotenv import load_dotenv
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass
 
 SECRET_KEY = "django-insecure-example-key-do-not-use-in-production"
 DEBUG = True
@@ -43,12 +48,12 @@ DATABASES = {
 # ──────────────────────────────────────────────────────────────────────────────
 DJANGO_LANGGRAPH_AGENT = {
     "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", ""),
-    "DEFAULT_MODEL": "google/gemini-2.5-flash",
+    "DEFAULT_MODEL": "google/gemini-3.5-flash-lite",
     "FALLBACK_MODELS": [
         "deepseek/deepseek-chat",
         "openai/gpt-4o-mini",
     ],
-    "SUMMARIZER_MODEL": "google/gemini-2.5-flash",
+    "SUMMARIZER_MODEL": "google/gemini-3.5-flash-lite",
     "MAX_TOKENS": 800,
     "SUMMARY_THRESHOLD": 6,
     "SITE_URL": "http://localhost:8000",

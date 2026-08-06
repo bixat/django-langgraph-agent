@@ -408,6 +408,16 @@ class AgentConfigAdmin(ModelAdmin):
 
     inlines = [ChatThreadInline]
 
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        from .api_views import clear_agent_cache
+        clear_agent_cache()
+
+    def delete_model(self, request, obj):
+        super().delete_model(request, obj)
+        from .api_views import clear_agent_cache
+        clear_agent_cache()
+
     @admin.display(description="Status", ordering="is_active")
     def status_badge(self, obj):
         if obj.is_active:

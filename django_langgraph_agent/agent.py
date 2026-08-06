@@ -41,7 +41,7 @@ class DjangoAgent:
         self.summary_threshold = summary_threshold
         self.label_builder = label_builder
         self.state_schema = state_schema
-        self.model_name = model_name
+        self._model_name = model_name.strip() if model_name else None
         self.allowed_models = allowed_models or []
         self.blocked_fields = blocked_fields or []
         self._custom_llm = llm
@@ -53,6 +53,24 @@ class DjangoAgent:
                 getattr(agent_settings, "APPROVAL_REQUIRED_TOOLS", [])
             )
 
+        self._compiled_graph = None
+
+    @property
+    def model_name(self) -> str | None:
+        if self._model_name is not None:
+            return self._model_name
+        try:
+            from .models import AgentConfig
+            config = AgentConfig.objects.filter(name=self.name, is_active=True).first()
+            if config and config.model_name:
+                return config.model_name.strip()
+        except Exception:
+            pass
+        return None
+
+    @model_name.setter
+    def model_name(self, value: str | None):
+        self._model_name = value.strip() if value else None
         self._compiled_graph = None
 
     def _state_modifier(self, state: dict, config: dict) -> list[BaseMessage]:

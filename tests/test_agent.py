@@ -142,3 +142,53 @@ def test_approval_tools_can_be_overridden():
         )
         assert "my_custom_tool" in agent.approval_tools
         assert "add_record" not in agent.approval_tools
+
+
+def test_agent_model_name_override():
+    """DjangoAgent uses configured model_name over default settings."""
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
+        agent_settings.reload()
+        from django_langgraph_agent import DjangoAgent
+
+        agent = DjangoAgent(
+            name="custom_model_agent",
+            system_prompt="Test",
+            tools=[],
+            model_name="google/gemini-3.5-flash-lite",
+        )
+        assert agent.model_name == "google/gemini-3.5-flash-lite"
+
+
+def test_agent_model_name_setter_resets_graph():
+    """Updating model_name resets compiled graph so it re-builds with new model."""
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
+        agent_settings.reload()
+        from django_langgraph_agent import DjangoAgent
+
+        agent = DjangoAgent(name="test", system_prompt="Test", tools=[])
+        agent._compiled_graph = "fake_graph"
+        agent.model_name = "google/gemini-3.5-flash-lite"
+        assert agent.model_name == "google/gemini-3.5-flash-lite"
+        assert agent._compiled_graph is None
+
+
+@pytest.mark.django_db
+def test_agent_model_name_db_fallback():
+    """DjangoAgent instantiated without model_name queries DB AgentConfig by name."""
+    with override_settings(DJANGO_LANGGRAPH_AGENT=AGENT_SETTINGS):
+        from django_langgraph_agent.conf import agent_settings
+        agent_settings.reload()
+        from django_langgraph_agent import DjangoAgent
+        from django_langgraph_agent.models import AgentConfig
+
+        AgentConfig.objects.create(
+            name="db_agent_test",
+            display_name="DB Agent Test",
+            system_prompt="Test prompt",
+            model_name="google/gemini-3.5-flash-lite",
+        )
+
+        agent = DjangoAgent(name="db_agent_test", system_prompt="Test", tools=[])
+        assert agent.model_name == "google/gemini-3.5-flash-lite"

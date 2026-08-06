@@ -13,6 +13,8 @@ Battle-tested in internal workflows at [Tathbeet](https://tathbeet.space) — a 
 
 ## Features
 
+![Django AI Agent Dashboard Chat UI](docs/assets/admin-chat-ui.png)
+
 - ⚙️ **Admin-Managed Agents** — create and customize agents from the Django Admin UI without code changes
 - 🔌 **Zero-Boilerplate API & UI** — built-in SSE chat endpoints & admin-integrated Chat UI (`include("django_langgraph_agent.urls")`)
 - 🎨 **Unfold / Django Admin Integration** — built-in chat UI embeds natively inside Django Admin / Unfold layout
@@ -77,8 +79,8 @@ DJANGO_LANGGRAPH_AGENT = {
     "OPENROUTER_API_KEY": env("OPENROUTER_API_KEY"),
 
     # LLM configuration (OpenRouter model IDs)
-    "DEFAULT_MODEL": "google/gemini-2.5-flash-preview",
-    "FALLBACK_MODELS": ["google/gemini-2.5-flash", "deepseek/deepseek-chat"],
+    "DEFAULT_MODEL": "google/gemini-3.5-flash-lite",
+    "FALLBACK_MODELS": ["google/gemini-2.0-flash-001", "openai/gpt-4o-mini"],
 
     # Enables conversation thread history
     "PERSIST_MESSAGES": True,

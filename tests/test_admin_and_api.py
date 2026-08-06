@@ -42,6 +42,7 @@ def test_agent_config_to_django_agent():
         name="test-admin-agent",
         display_name="Test Admin Agent",
         system_prompt="You are a test agent.",
+        model_name="google/gemini-3.5-flash-lite",
         extra_tools=["send_test_email"],
         extra_approval_tools=["send_test_email"],
     )
@@ -49,6 +50,7 @@ def test_agent_config_to_django_agent():
     agent = config.to_django_agent()
     assert isinstance(agent, DjangoAgent)
     assert agent.name == "test-admin-agent"
+    assert agent.model_name == "google/gemini-3.5-flash-lite"
     assert "send_test_email" in agent.approval_tools
 
     unregister_tool("send_test_email")
