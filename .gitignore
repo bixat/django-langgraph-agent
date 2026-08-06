@@ -8,3 +8,4 @@ django_langgraph_agent/migrations/__pycache__/
 django_langgraph_agent/tools/__pycache__/
 django_langgraph_agent/management/commands/__pycache__/
 django_langgraph_agent/management/__pycache__/
+example_project/.env

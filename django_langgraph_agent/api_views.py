@@ -8,8 +8,9 @@ import json
 import logging
 
 from django.contrib import admin
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse, StreamingHttpResponse
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
@@ -311,6 +312,127 @@ def delete_thread_view(request):
         "thread_id": thread_id,
         "deleted": deleted_count > 0,
     })
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Threads API (used by agent switcher — no page reload)
+# ──────────────────────────────────────────────────────────────────────────────
+
+@require_http_methods(["GET"])
+def get_threads_view(request):
+    """
+    Returns JSON list of conversation threads for a given agent.
+    Used by the chat UI to switch agents without a full page reload.
+
+    GET /api/agent/chat/threads/?agent=<name>
+    Response: {"threads": [{"id": str, "title": str, "date": str}, ...]}
+    """
+    from .models import AgentConfig, ChatThread, ChatMessage
+    from .conf import agent_settings
+
+    agent_name = request.GET.get("agent", "").strip()
+    if not agent_name:
+        return JsonResponse({"error": "'agent' param required"}, status=400)
+
+    agent_config = AgentConfig.objects.filter(name=agent_name, is_active=True).first()
+    if not agent_config:
+        return JsonResponse({"threads": []})
+
+    persist = getattr(agent_settings, "PERSIST_MESSAGES", False)
+    if not persist:
+        return JsonResponse({"threads": [], "persist": False})
+
+    threads = []
+    for t in ChatThread.objects.filter(agent=agent_config).order_by("-updated_at")[:30]:
+        first_msg = ChatMessage.objects.filter(thread=t, is_user=True).order_by("created_at").first()
+        title = (first_msg.text[:35] + "\u2026") if first_msg else t.thread_id
+        threads.append({
+            "id": t.thread_id,
+            "title": title,
+            "date": t.created_at.strftime("%b %d, %H:%M"),
+        })
+    return JsonResponse({"threads": threads, "persist": True})
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Admin-Protected Chat UI View
+# ──────────────────────────────────────────────────────────────────────────────
+
+@staff_member_required(login_url="/admin/login/")
+@require_http_methods(["GET"])
+def chat_page_view(request):
+    """
+    Built-in admin-protected chat page.
+    Requires staff login. Renders inside the Django Admin panel (with Unfold theme support).
+    """
+    from .models import AgentConfig, ChatThread, ChatMessage
+    from .conf import agent_settings
+
+    context = admin.site.each_context(request)
+
+    agents = AgentConfig.objects.filter(is_active=True)
+    if not agents.exists():
+        context.update({
+            "title": "AI Chat",
+            "agents": [],
+            "error": "No active agents found. Create one in the Agent Configurations admin.",
+            "site_title": getattr(agent_settings, "SITE_TITLE", "AI Chat"),
+        })
+        return render(request, "django_langgraph_agent/chat.html", context)
+
+    agent_slug = request.GET.get("agent", "").strip()
+    current_agent = agents.filter(name=agent_slug).first() or agents.first()
+
+    current_thread_id = request.GET.get("thread_id", "").strip()
+    if current_thread_id == "new":
+        import time
+        new_id = f"thread-{int(time.time())}"
+        return redirect(f"{request.path}?agent={current_agent.name}&thread_id={new_id}")
+
+    persist_messages = getattr(agent_settings, "PERSIST_MESSAGES", False)
+
+    thread_list = []
+    chat_history = []
+    if persist_messages:
+        thread_qs = ChatThread.objects.filter(agent=current_agent).order_by("-updated_at")[:30]
+
+        if not current_thread_id and thread_qs.exists():
+            current_thread_id = thread_qs.first().thread_id
+
+        for t in thread_qs:
+            first_user_msg = ChatMessage.objects.filter(thread=t, is_user=True).order_by("created_at").first()
+            title = (first_user_msg.text[:35] + "…") if first_user_msg else t.thread_id
+            thread_list.append({
+                "id": t.thread_id,
+                "title": title,
+                "start_time": t.created_at,
+            })
+
+        if current_thread_id:
+            active_thread = ChatThread.objects.filter(thread_id=current_thread_id).first()
+            if active_thread:
+                chat_history = ChatMessage.objects.filter(thread=active_thread).order_by("created_at")
+
+    if not current_thread_id:
+        import time
+        current_thread_id = f"thread-{int(time.time())}"
+
+    context.update({
+        "title": f"AI Chat — {current_agent.display_name}",
+        "agents": agents,
+        "current_agent": current_agent,
+        "threads": thread_list,
+        "current_thread_id": current_thread_id,
+        "chat_history": chat_history,
+        "persist_messages": persist_messages,
+        "site_title": getattr(agent_settings, "SITE_TITLE", "AI Chat"),
+    })
+
+    return render(request, "django_langgraph_agent/chat.html", context)
+
+
+admin_chat_view = chat_page_view
+
 
 
 # ──────────────────────────────────────────────────────────────────────────────

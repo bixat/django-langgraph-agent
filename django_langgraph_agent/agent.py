@@ -90,9 +90,11 @@ class DjangoAgent:
 
         prompt_str += (
             "\n\n[COMMUNICATION DIRECTIVE]\n"
-            "Communicate in a natural, conversational, and human-friendly way. "
-            "NEVER use technical jargon like 'CRUD', 'Model Schemas', 'Query Records', 'Aggregate Records', or 'Databases' when speaking to the user. "
-            "Instead of describing the backend tools you use, focus on the real-world actions you can achieve (e.g., 'I can look up your orders, check product stock, or update your details.')."
+            "1. Always address the user directly in second person ('Here are your orders...', 'How can I help you today?').\n"
+            "2. NEVER speak about the user in third person (e.g. do NOT say 'User requested...', 'The user wants...', 'Customer asked for...').\n"
+            "3. NEVER repeat, quote, or output the internal conversation summary or memory notes to the user.\n"
+            "4. Communicate in a warm, natural, and human-friendly tone.\n"
+            "5. NEVER use technical backend jargon like 'CRUD', 'Model Schemas', 'Query Records', 'Aggregate Records', or 'Databases' when responding to the user."
         )
 
         return [SystemMessage(content=prompt_str)] + existing_messages

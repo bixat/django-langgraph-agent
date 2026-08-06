@@ -106,3 +106,47 @@ def test_delete_thread_view(client):
     data = response.json()
     assert data["status"] == "deleted"
     assert not ChatThread.objects.filter(thread_id="thread-del-123").exists()
+
+
+@pytest.mark.django_db
+def test_chat_page_view_requires_login(client):
+    """GET /api/agent/chat/ui/ redirects to admin login if not authenticated."""
+    response = client.get("/api/agent/chat/ui/")
+    # staff_member_required redirects unauthenticated users to admin login
+    assert response.status_code == 302
+    assert "/admin/login/" in response["Location"]
+
+
+@pytest.mark.django_db
+def test_chat_page_view_staff_can_access(client, django_user_model):
+    """GET /api/agent/chat/ui/ renders standalone chat template for staff users."""
+    AgentConfig.objects.create(
+        name="test-agent", display_name="Test Agent", system_prompt="Test", is_active=True
+    )
+    user = django_user_model.objects.create_user(
+        username="admin_tester", password="secret", is_staff=True
+    )
+    client.force_login(user)
+    response = client.get("/api/agent/chat/ui/")
+    assert response.status_code == 200
+    assert "Test Agent" in response.content.decode()
+    assert "django_langgraph_agent/chat.html" in [t.name for t in response.templates]
+
+
+@pytest.mark.django_db
+def test_get_threads_view(client):
+    """GET /api/agent/chat/threads/?agent=<name> returns JSON thread list."""
+    agent = AgentConfig.objects.create(
+        name="test-agent", display_name="Test Agent", system_prompt="Test", is_active=True
+    )
+    thread = ChatThread.objects.create(thread_id="thread-xyz-123", agent=agent)
+    ChatMessage.objects.create(thread=thread, text="Hello world from user", is_user=True)
+
+    with override_settings(DJANGO_LANGGRAPH_AGENT={"PERSIST_MESSAGES": True}):
+        response = client.get("/api/agent/chat/threads/?agent=test-agent")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["persist"] is True
+        assert len(data["threads"]) == 1
+        assert data["threads"][0]["id"] == "thread-xyz-123"
+        assert "Hello world" in data["threads"][0]["title"]

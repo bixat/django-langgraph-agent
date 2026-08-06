@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "django-langgraph-agent"
-version = "0.1.1"
+version = "0.1.2"
 description = "A reusable Django package for building streaming AI agents with LangGraph and OpenRouter"
 readme = "README.md"
 license = { text = "MIT" }

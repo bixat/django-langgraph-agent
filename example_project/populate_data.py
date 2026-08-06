@@ -69,6 +69,7 @@ def populate():
         name="store",
         defaults={
             "display_name": "Customer Support Agent",
+            "model_name": "google/gemini-2.5-flash",
             "system_prompt": (
                 "You are a warm, helpful customer support agent for our online tech store.\n"
                 "You can search products, check stock, and assist customers.\n"
@@ -85,6 +86,7 @@ def populate():
         name="store_admin",
         defaults={
             "display_name": "Store Operations Admin Agent",
+            "model_name": "google/gemini-2.5-flash",
             "system_prompt": (
                 "You are the senior store operations AI manager.\n"
                 "You have full CRUD access to Products and Orders.\n"

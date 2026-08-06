@@ -1,0 +1,1110 @@
+{% extends "admin/base_site.html" %}
+{% load i18n static %}
+
+{% block title %}{% if current_agent %}{{ current_agent.display_name }} — {% endif %}{% trans "AI Chat" %} | {{ site_title|default:_('Django site admin') }}{% endblock %}
+
+{% block extrahead %}
+{{ block.super }}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+/* ── Reset admin overrides ── */
+#content {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+.breadcrumbs {
+  display: none !important;
+}
+
+/* ── Tokens ── */
+:root {
+  --c-accent:        #10b981;
+  --c-accent-hover:  #059669;
+  --c-accent-glow:   rgba(16,185,129,.18);
+  --c-accent-dim:    rgba(16,185,129,.08);
+  --c-user-grad:     linear-gradient(135deg,#059669 0%,#0d9488 100%);
+  --c-danger:        #ef4444;
+  --c-warn-bg:       rgba(120,40,0,.14);
+  --c-warn-border:   rgba(180,83,9,.4);
+  --r-full:          9999px;
+  --r-xl:            16px;
+  --r-lg:            12px;
+  --r-md:            8px;
+  --r-sm:            6px;
+  --shadow:          0 4px 14px rgba(0,0,0,.12);
+  --tx:              .18s ease;
+}
+
+/* Chat shell */
+.ai-shell {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 110px);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  box-sizing: border-box;
+  position: relative;
+}
+
+/* ── Sidebar ── */
+.ai-sidebar {
+  width: 264px;
+  flex-shrink: 0;
+  background: var(--darkened-bg, #ffffff);
+  border: 1px solid var(--hairline-color, #e5e7eb);
+  border-radius: var(--r-xl);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: transform .25s ease-in-out, box-shadow .25s ease-in-out;
+}
+.ai-sidebar-hd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--hairline-color, #e5e7eb);
+  flex-shrink: 0;
+}
+.ai-sidebar-lbl {
+  font-size: .7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--secondary-fg, #6b7280);
+}
+.ai-sidebar-body { flex: 1; overflow-y: auto; padding: 6px; }
+
+/* Thread items */
+.ai-thread {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-lg);
+  border: 1px solid transparent;
+  text-decoration: none !important;
+  color: var(--body-fg, #1f2937) !important;
+  margin-bottom: 2px;
+  transition: background var(--tx), border-color var(--tx);
+  position: relative;
+  cursor: pointer;
+}
+.ai-thread:hover { background: var(--selected-row, #f3f4f6); }
+.ai-thread.active {
+  background: var(--c-accent-dim);
+  border-color: var(--c-accent);
+  color: var(--c-accent-hover) !important;
+}
+.ai-thread-ico {
+  width: 30px; height: 30px;
+  border-radius: var(--r-md);
+  background: var(--hairline-color, #f3f4f6);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--secondary-fg, #6b7280);
+  transition: background var(--tx), color var(--tx);
+}
+.ai-thread.active .ai-thread-ico { background: var(--c-accent); color: #ffffff !important; }
+.ai-thread-ico .msr { font-size: 15px; }
+.ai-thread-meta { flex: 1; min-width: 0; }
+.ai-thread-name {
+  font-size: .8rem; font-weight: 500;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: inherit !important;
+}
+.ai-thread-date { font-size: .67rem; color: var(--secondary-fg, #9ca3af) !important; margin-top: 1px; }
+.ai-thread-del { opacity: 0; flex-shrink: 0; transition: opacity var(--tx); }
+.ai-thread:hover .ai-thread-del { opacity: 1; }
+
+.ai-no-threads {
+  text-align: center;
+  padding: 28px 14px;
+  color: var(--secondary-fg, #9ca3af);
+  font-size: .8rem;
+  line-height: 1.6;
+}
+.ai-no-threads .msr { font-size: 28px; display: block; margin-bottom: 6px; }
+
+/* ── Main pane ── */
+.ai-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--darkened-bg, #ffffff);
+  border: 1px solid var(--hairline-color, #e5e7eb);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* Header bar */
+.ai-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--hairline-color, #e5e7eb);
+  flex-shrink: 0;
+  gap: 10px;
+  background: var(--darkened-bg, #ffffff);
+}
+.ai-agent-avatar {
+  width: 34px; height: 34px; border-radius: var(--r-full);
+  background: var(--c-user-grad);
+  display: flex; align-items: center; justify-content: center;
+  color: #ffffff !important; flex-shrink: 0;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--c-accent-dim);
+}
+.ai-agent-avatar .msr { font-size: 17px; color: #ffffff !important; }
+.ai-agent-name { font-size: .88rem; font-weight: 700; line-height: 1.2; color: var(--body-fg, #111827) !important; }
+.ai-agent-status {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .67rem; color: var(--c-accent) !important; font-weight: 600;
+}
+.ai-dot {
+  width: 6px; height: 6px; background: var(--c-accent);
+  border-radius: var(--r-full);
+  animation: ai-pulse 2s infinite;
+}
+@keyframes ai-pulse {
+  0%,100% { box-shadow: 0 0 0 0 var(--c-accent-glow); }
+  50%      { box-shadow: 0 0 0 5px transparent; }
+}
+
+/* Agent switcher */
+.ai-switcher-wrap { position: relative; }
+.ai-switcher {
+  appearance: none;
+  border: 1px solid var(--hairline-color, #d1d5db) !important;
+  background: var(--body-bg, #ffffff) !important;
+  color: var(--body-fg, #1f2937) !important;
+  font-family: inherit !important;
+  font-size: .8rem !important; font-weight: 500 !important;
+  padding: .32rem 1.8rem .32rem .7rem !important;
+  border-radius: var(--r-full) !important;
+  cursor: pointer; outline: none !important;
+  box-shadow: none !important;
+  transition: border-color var(--tx);
+}
+.ai-switcher:hover, .ai-switcher:focus { border-color: var(--c-accent) !important; }
+.ai-switcher-arrow {
+  position: absolute; right: 6px; top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  color: var(--secondary-fg, #6b7280); font-size: 15px;
+}
+
+/* Buttons */
+.ai-ico-btn {
+  background: none !important; border: none !important; cursor: pointer;
+  color: var(--secondary-fg, #6b7280) !important;
+  padding: 5px; border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--tx), color var(--tx);
+  text-decoration: none !important;
+  box-shadow: none !important;
+}
+.ai-ico-btn:hover {
+  background: var(--selected-row, #f3f4f6) !important;
+  color: var(--body-fg, #111827) !important;
+}
+.ai-ico-btn .msr { font-size: 18px; color: inherit !important; }
+
+/* ── Mobile Responsive Drawer ── */
+.ai-mobile-btn {
+  display: none !important;
+}
+
+.ai-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  z-index: 99;
+}
+.ai-backdrop.active {
+  display: block !important;
+}
+
+@media (max-width: 768px) {
+  .ai-mobile-btn {
+    display: flex !important;
+  }
+  .ai-shell {
+    height: calc(100vh - 75px);
+    gap: 0;
+  }
+  .ai-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    height: 100vh;
+    z-index: 100;
+    width: 280px;
+    border-radius: 0;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+    transform: translateX(-100%);
+  }
+  .ai-sidebar.open {
+    transform: translateX(0);
+  }
+  .ai-main {
+    border-radius: 0;
+  }
+}
+
+/* ── Messages ── */
+.ai-messages {
+  flex: 1; overflow-y: auto;
+  padding: 18px 16px;
+  display: flex; flex-direction: column; gap: 18px;
+  scroll-behavior: smooth;
+}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-thumb { background: var(--hairline-color, #d1d5db); border-radius: var(--r-full); }
+
+.ai-sys-chip {
+  align-self: center;
+  background: var(--selected-row, #f3f4f6);
+  border: 1px solid var(--hairline-color, #e5e7eb);
+  color: var(--secondary-fg, #6b7280);
+  font-size: .67rem; padding: 3px 12px;
+  border-radius: var(--r-full);
+}
+.ai-notice-chip {
+  align-self: center;
+  background: var(--c-accent-dim);
+  border: 1px solid rgba(16,185,129,.25);
+  color: var(--c-accent-hover);
+  font-size: .67rem; padding: 3px 12px;
+  border-radius: var(--r-full);
+  display: flex; align-items: center; gap: 4px;
+}
+.ai-notice-chip .msr { font-size: 12px; }
+
+/* Welcome */
+.ai-welcome {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 12px;
+  padding: 40px 20px; text-align: center;
+  animation: ai-fadeup .35s ease;
+}
+.ai-welcome-icon {
+  width: 62px; height: 62px; border-radius: var(--r-xl);
+  background: var(--c-user-grad);
+  display: flex; align-items: center; justify-content: center;
+  color: #ffffff !important;
+  box-shadow: var(--shadow), 0 0 28px var(--c-accent-glow);
+}
+.ai-welcome-icon .msr { font-size: 28px; color: #ffffff !important; }
+.ai-welcome-title { font-size: 1.2rem; font-weight: 700; color: var(--body-fg, #111827) !important; }
+.ai-welcome-sub { color: var(--secondary-fg, #6b7280) !important; font-size: .85rem; max-width: 320px; line-height: 1.6; }
+
+/* Message rows */
+.ai-msg-row { display: flex; align-items: flex-start; gap: 8px; animation: ai-fadeup .22s ease; }
+.ai-msg-row.user { flex-direction: row-reverse; }
+@keyframes ai-fadeup {
+  from { opacity: 0; transform: translateY(7px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.ai-avatar {
+  width: 30px; height: 30px; border-radius: var(--r-full);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 4px; color: #ffffff !important;
+}
+.ai-avatar .msr { font-size: 14px; color: #ffffff !important; }
+.ai-msg-row.agent .ai-avatar { background: var(--c-user-grad); }
+.ai-msg-row.user  .ai-avatar { background: linear-gradient(135deg,#10b981,#14b8a6); }
+
+.ai-msg-body { display: flex; flex-direction: column; gap: 3px; max-width: min(84%,660px); }
+.ai-msg-row.user .ai-msg-body { align-items: flex-end; }
+
+.ai-msg-meta {
+  display: flex; align-items: center; gap: 5px;
+  font-size: .67rem; font-weight: 700;
+  color: var(--secondary-fg, #6b7280) !important;
+}
+.ai-model-badge {
+  display: inline-flex; align-items: center; gap: 2px;
+  font-size: .6rem; font-family: monospace;
+  background: var(--selected-row, #f3f4f6);
+  border: 1px solid var(--hairline-color, #e5e7eb);
+  color: var(--secondary-fg, #4b5563);
+  padding: 1px 5px; border-radius: 4px;
+}
+.ai-model-badge .msr { font-size: 10px; color: var(--c-accent); }
+
+.ai-bubble {
+  padding: 9px 13px; border-radius: var(--r-xl);
+  line-height: 1.65; font-size: .875rem; word-break: break-word;
+}
+.ai-bubble.agent {
+  background: var(--darkened-bg, #f9fafb);
+  border: 1px solid var(--hairline-color, #e5e7eb);
+  border-top-left-radius: 4px;
+  color: var(--body-fg, #1f2937) !important;
+}
+.ai-bubble.agent p,
+.ai-bubble.agent li,
+.ai-bubble.agent td,
+.ai-bubble.agent th {
+  color: var(--body-fg, #1f2937) !important;
+}
+.ai-bubble.user {
+  background: var(--c-user-grad) !important;
+  border-top-right-radius: 4px;
+  color: #ffffff !important;
+  box-shadow: var(--shadow);
+}
+.ai-bubble.user,
+.ai-bubble.user *,
+.ai-bubble.user p,
+.ai-bubble.user span,
+.ai-bubble.user div {
+  color: #ffffff !important;
+}
+
+/* Prose */
+.ai-prose p  { margin: .3em 0; }
+.ai-prose ul { list-style: disc; padding-left: 1.3em; margin: .3em 0; }
+.ai-prose ol { list-style: decimal; padding-left: 1.3em; margin: .3em 0; }
+.ai-prose h1,.ai-prose h2,.ai-prose h3 { font-weight: 700; margin: .45em 0 .2em; color: inherit !important; }
+.ai-prose h1 { font-size: 1.1em; }
+.ai-prose h2 { font-size: 1em; }
+.ai-prose h3 { font-size: .95em; }
+.ai-prose pre {
+  background: #1e1e2e !important; color: #cdd6f4 !important;
+  border-radius: var(--r-md); padding: .8em 1em;
+  overflow-x: auto; margin: .5em 0; font-size: .8em;
+}
+.ai-prose code {
+  font-family: monospace; font-size: .85em;
+  background: rgba(0,0,0,.06);
+  padding: .1em .35em; border-radius: 3px;
+}
+.ai-prose pre code { background: none !important; padding: 0; color: inherit !important; }
+.ai-prose blockquote {
+  border-left: 3px solid var(--hairline-color, #d1d5db);
+  padding-left: .8em; color: var(--secondary-fg, #6b7280);
+  margin: .5em 0; font-style: italic;
+}
+.ai-prose table { border-collapse: collapse; width: 100%; margin: .5em 0; font-size: .82em; }
+.ai-prose th,.ai-prose td { border: 1px solid var(--hairline-color, #e5e7eb); padding: .35em .6em; }
+.ai-prose th { background: var(--selected-row, #f3f4f6); font-weight: 700; }
+.ai-prose a { color: var(--c-accent) !important; text-decoration: underline; }
+
+think, thought {
+  display: block; font-size: .8rem; color: var(--secondary-fg, #6b7280);
+  background: rgba(0,0,0,.03);
+  border-left: 3px solid var(--hairline-color, #d1d5db);
+  padding: .5em .8em; margin: .5em 0;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0; font-style: italic;
+}
+think::before, thought::before {
+  content: "Thought Process";
+  display: block; font-weight: 700; font-size: .63rem;
+  text-transform: uppercase; letter-spacing: .06em;
+  color: var(--secondary-fg, #9ca3af); margin-bottom: 3px; font-style: normal;
+}
+
+/* Typing indicator */
+.ai-typing-row { display: flex; align-items: center; gap: 8px; }
+.ai-typing-dots {
+  display: flex; gap: 4px; padding: 10px 13px;
+  background: var(--darkened-bg, #f9fafb);
+  border: 1px solid var(--hairline-color, #e5e7eb);
+  border-radius: var(--r-xl); border-top-left-radius: 4px;
+}
+.ai-typing-dots span {
+  width: 7px; height: 7px; background: var(--c-accent);
+  border-radius: var(--r-full); animation: ai-bounce 1.2s infinite;
+}
+.ai-typing-dots span:nth-child(2) { animation-delay: .2s; }
+.ai-typing-dots span:nth-child(3) { animation-delay: .4s; }
+@keyframes ai-bounce {
+  0%,80%,100% { transform: translateY(0); }
+  40%          { transform: translateY(-7px); }
+}
+
+/* Approval card */
+.ai-approval-row { display: flex; gap: 8px; }
+.ai-approval-card {
+  background: var(--c-warn-bg);
+  border: 1px solid var(--c-warn-border);
+  border-radius: var(--r-xl); padding: 13px;
+  max-width: 480px; animation: ai-fadeup .22s ease;
+}
+.ai-approval-ttl {
+  font-size: .78rem; font-weight: 700; color: #d97706;
+  margin-bottom: 9px; display: flex; align-items: center; gap: 4px;
+}
+.ai-approval-ttl .msr { font-size: 15px; }
+.ai-approval-tool {
+  background: rgba(0,0,0,.04);
+  border: 1px solid var(--c-warn-border);
+  border-radius: var(--r-md); padding: 7px 11px;
+  font-size: .8rem; margin-bottom: 5px;
+}
+.ai-approval-actions { display: flex; gap: 7px; margin-top: 11px; flex-wrap: wrap; }
+.ai-btn-approve,.ai-btn-deny {
+  padding: .38rem .95rem; border: none !important; border-radius: var(--r-full);
+  font-size: .77rem; font-weight: 700; cursor: pointer;
+  font-family: inherit; transition: opacity var(--tx);
+  box-shadow: none !important;
+}
+.ai-btn-approve { background: #15803d !important; color: #bbf7d0 !important; }
+.ai-btn-approve:hover { background: #166534 !important; }
+.ai-btn-deny { background: #7f1d1d !important; color: #fecaca !important; }
+.ai-btn-deny:hover { background: #991b1b !important; }
+.ai-btn-approve:disabled,.ai-btn-deny:disabled { opacity: .45; cursor: not-allowed; }
+
+/* ── Input ── */
+.ai-input-area {
+  border-top: 1px solid var(--hairline-color, #e5e7eb);
+  padding: 12px 14px;
+  flex-shrink: 0;
+  background: var(--darkened-bg, #ffffff);
+}
+.ai-input-form {
+  display: flex; align-items: flex-end; gap: 7px;
+  background: var(--body-bg, #f9fafb);
+  border: 1px solid var(--hairline-color, #d1d5db);
+  border-radius: var(--r-xl);
+  padding: 7px 7px 7px 13px;
+  transition: border-color var(--tx), box-shadow var(--tx);
+}
+.ai-input-form:focus-within {
+  border-color: var(--c-accent) !important;
+  box-shadow: 0 0 0 3px var(--c-accent-dim) !important;
+}
+.ai-textarea {
+  flex: 1; background: transparent !important; border: none !important; outline: none !important; resize: none;
+  font-family: inherit !important; font-size: .875rem !important; line-height: 1.55 !important;
+  color: var(--body-fg, #1f2937) !important; box-shadow: none !important;
+  min-height: 36px; max-height: 160px; overflow-y: auto;
+  padding: .3rem 0 !important;
+}
+.ai-textarea::placeholder { color: var(--secondary-fg, #9ca3af) !important; }
+.ai-send-btn {
+  width: 34px; height: 34px; flex-shrink: 0;
+  background: var(--c-accent) !important; border: none !important; border-radius: var(--r-full);
+  color: #ffffff !important; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--tx), transform var(--tx);
+  box-shadow: 0 2px 8px var(--c-accent-glow) !important;
+}
+.ai-send-btn:hover { background: var(--c-accent-hover) !important; transform: scale(1.07); }
+.ai-send-btn:active { transform: scale(.95); }
+.ai-send-btn:disabled { background: var(--hairline-color, #d1d5db) !important; box-shadow: none !important; cursor: not-allowed; }
+.ai-send-btn .msr { font-size: 17px; color: #ffffff !important; }
+.ai-input-hint {
+  text-align: center; font-size: .62rem;
+  color: var(--secondary-fg, #9ca3af); margin-top: 5px;
+}
+.ai-input-hint kbd {
+  background: var(--body-bg, #f3f4f6);
+  border: 1px solid var(--hairline-color, #d1d5db);
+  border-radius: 3px; padding: 0 4px; font-size: .62rem;
+}
+
+/* Sidebar loading state */
+.ai-threads-loading {
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; gap: 6px;
+  color: var(--secondary-fg, #9ca3af); font-size: .8rem;
+}
+.ai-spin {
+  width: 14px; height: 14px;
+  border: 2px solid var(--hairline-color, #d1d5db);
+  border-top-color: var(--c-accent);
+  border-radius: var(--r-full);
+  animation: ai-spin .7s linear infinite;
+}
+@keyframes ai-spin { to { transform: rotate(360deg); } }
+
+/* ── Dark Mode Overrides (Unfold / Admin) ── */
+.dark .ai-sidebar,
+.dark .ai-main {
+  background: #111827 !important;
+  border-color: #1f2937 !important;
+}
+.dark .ai-header,
+.dark .ai-sidebar-hd,
+.dark .ai-input-area {
+  background: #111827 !important;
+  border-color: #1f2937 !important;
+}
+.dark .ai-bubble.agent {
+  background: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #f3f4f6 !important;
+}
+.dark .ai-bubble.agent p,
+.dark .ai-bubble.agent li,
+.dark .ai-bubble.agent td,
+.dark .ai-bubble.agent th {
+  color: #f3f4f6 !important;
+}
+.dark .ai-input-form {
+  background: #1f2937 !important;
+  border-color: #374151 !important;
+}
+.dark .ai-textarea {
+  color: #f3f4f6 !important;
+}
+.dark .ai-thread-name,
+.dark .ai-agent-name,
+.dark .ai-welcome-title {
+  color: #f3f4f6 !important;
+}
+.dark .ai-thread:hover {
+  background: #1f2937 !important;
+}
+.dark .ai-switcher {
+  background: #1f2937 !important;
+  border-color: #374151 !important;
+  color: #f3f4f6 !important;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if error %}
+<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:60px;text-align:center;">
+  <span class="material-symbols-rounded msr" style="font-size:48px;color:var(--c-danger)">smart_toy</span>
+  <p style="color:var(--secondary-fg)">{{ error }}</p>
+  <a href="/admin/django_langgraph_agent/agentconfig/add/" style="color:var(--c-accent)">Create an Agent in Admin →</a>
+</div>
+{% else %}
+<div class="ai-backdrop" id="ai-backdrop" onclick="toggleSidebar(false)"></div>
+
+<div class="ai-shell">
+
+  <!-- ── Sidebar ── -->
+  <aside class="ai-sidebar">
+    <div class="ai-sidebar-hd">
+      <span class="ai-sidebar-lbl">Conversations</span>
+      <div style="display:flex;gap:2px">
+        <button class="ai-ico-btn" onclick="newThread()" title="New conversation">
+          <span class="material-symbols-rounded msr">add</span>
+        </button>
+        <button class="ai-ico-btn ai-mobile-btn" onclick="toggleSidebar(false)" title="Close menu">
+          <span class="material-symbols-rounded msr">close</span>
+        </button>
+      </div>
+    </div>
+    <div class="ai-sidebar-body" id="thread-list">
+      {% if not persist_messages %}
+      <div class="ai-no-threads">
+        <span class="material-symbols-rounded msr">history_toggle_off</span>
+        Enable <code style="font-size:.7rem;color:var(--c-accent)">PERSIST_MESSAGES&nbsp;=&nbsp;True</code>
+        to keep history.
+      </div>
+      {% elif threads %}
+        {% for thread in threads %}
+        <div class="ai-thread {% if current_thread_id == thread.id %}active{% endif %}"
+             onclick="selectThread('{{ thread.id }}')"
+             data-id="{{ thread.id }}">
+          <div class="ai-thread-ico">
+            <span class="material-symbols-rounded msr">chat_bubble</span>
+          </div>
+          <div class="ai-thread-meta">
+            <div class="ai-thread-name" title="{{ thread.title }}">{{ thread.title }}</div>
+            <div class="ai-thread-date">{{ thread.start_time|date:"M d, H:i" }}</div>
+          </div>
+          <span class="ai-thread-del">
+            <button class="ai-ico-btn" onclick="deleteThread(event,'{{ thread.id }}')" title="Delete" style="color:var(--c-danger)">
+              <span class="material-symbols-rounded msr">delete</span>
+            </button>
+          </span>
+        </div>
+        {% endfor %}
+      {% else %}
+        <div class="ai-no-threads">
+          <span class="material-symbols-rounded msr">forum</span>
+          No conversations yet.<br>Send a message to start!
+        </div>
+      {% endif %}
+    </div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <div class="ai-main">
+
+    <!-- Header -->
+    <div class="ai-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="ai-ico-btn ai-mobile-btn" onclick="toggleSidebar(true)" title="Conversations">
+          <span class="material-symbols-rounded msr">menu</span>
+        </button>
+        <div class="ai-agent-avatar">
+          <span class="material-symbols-rounded msr">smart_toy</span>
+        </div>
+        <div>
+          <div class="ai-agent-name" id="agent-name-label">{{ current_agent.display_name }}</div>
+          <div class="ai-agent-status">
+            <span class="ai-dot"></span>
+            Online &amp; Ready
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:6px">
+        {% if agents|length > 1 %}
+        <div class="ai-switcher-wrap">
+          <select class="ai-switcher" id="agent-switcher"
+                  onchange="switchAgent(this.value)" aria-label="Switch agent">
+            {% for agent in agents %}
+            <option value="{{ agent.name }}"
+                    data-label="{{ agent.display_name }}"
+                    {% if current_agent.name == agent.name %}selected{% endif %}>
+              {{ agent.display_name }}{% if agents|length > 1 %} ({{ agent.name }}){% endif %}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="material-symbols-rounded ai-switcher-arrow msr">expand_more</span>
+        </div>
+        {% endif %}
+        <button class="ai-ico-btn" onclick="newThread()" title="New chat">
+          <span class="material-symbols-rounded msr">add_comment</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Messages -->
+    <div class="ai-messages" id="chatbox">
+      {% if not persist_messages %}
+      <div class="ai-notice-chip">
+        <span class="material-symbols-rounded msr">info</span>
+        History not saved — enable <strong>&nbsp;PERSIST_MESSAGES&nbsp;=&nbsp;True</strong>
+      </div>
+      {% endif %}
+
+      <div class="ai-sys-chip" id="sys-chip">
+        Started with <strong>{{ current_agent.display_name }}</strong>
+      </div>
+
+      <div class="ai-welcome" id="welcome">
+        <div class="ai-welcome-icon">
+          <span class="material-symbols-rounded msr">smart_toy</span>
+        </div>
+        <div class="ai-welcome-title">Hi, I&rsquo;m {{ current_agent.display_name }}</div>
+        <div class="ai-welcome-sub">How can I help you today?</div>
+      </div>
+    </div>
+
+    <!-- Input -->
+    <div class="ai-input-area">
+      <form class="ai-input-form" id="chat-form" onsubmit="sendMessage(event)">
+        <textarea id="chat-input" class="ai-textarea" rows="1"
+                  placeholder="Message {{ current_agent.display_name }}&hellip;"></textarea>
+        <button type="submit" id="send-btn" class="ai-send-btn" title="Send">
+          <span class="material-symbols-rounded msr">arrow_upward</span>
+        </button>
+      </form>
+      <p class="ai-input-hint">
+        <kbd>Enter</kbd> send &nbsp;&middot;&nbsp; <kbd>Shift+Enter</kbd> new line
+      </p>
+    </div>
+  </div><!-- /.ai-main -->
+</div><!-- /.ai-shell -->
+
+<script>
+/* ── Server-rendered config ─────────────────────────────────────────────── */
+let AGENT_NAME    = "{{ current_agent.name|escapejs }}";
+let AGENT_LABEL   = "{{ current_agent.display_name|escapejs }}";
+let THREAD_ID     = "{{ current_thread_id|escapejs }}";
+const URL_CHAT    = "{% url 'django_langgraph_agent:chat' %}";
+const URL_APPROVE = "{% url 'django_langgraph_agent:approve' %}";
+const URL_DELETE  = "{% url 'django_langgraph_agent:delete_thread' %}";
+const URL_THREADS = "{% url 'django_langgraph_agent:get_threads' %}";
+const CSRF        = "{{ csrf_token }}";
+
+const chatbox   = document.getElementById("chatbox");
+const chatInput = document.getElementById("chat-input");
+const sendBtn   = document.getElementById("send-btn");
+const chatForm  = document.getElementById("chat-form");
+let   welcome   = document.getElementById("welcome");
+
+marked.setOptions({ breaks: true, gfm: true });
+
+/* ── Mobile Sidebar Drawer ──────────────────────────────────────────────── */
+function toggleSidebar(forceState) {
+  const sidebar  = document.querySelector(".ai-sidebar");
+  const backdrop = document.getElementById("ai-backdrop");
+  if (!sidebar) return;
+
+  const isOpen = forceState !== undefined ? forceState : !sidebar.classList.contains("open");
+  sidebar.classList.toggle("open", isOpen);
+  if (backdrop) backdrop.classList.toggle("active", isOpen);
+}
+
+/* ── Restore history ────────────────────────────────────────────────────── */
+document.addEventListener("DOMContentLoaded", () => {
+  {% if chat_history %}
+  if (welcome && welcome.parentNode) welcome.remove();
+  document.getElementById("sys-chip").textContent = "Conversation Restored";
+  {% for msg in chat_history %}
+  {% if msg.is_user %}
+  appendMessage("user", `{{ msg.text|escapejs }}`);
+  {% else %}
+  appendMessage("agent", `{{ msg.text|escapejs }}`, `{{ msg.model_name|default:""|escapejs }}`);
+  {% endif %}
+  {% endfor %}
+  chatbox.scrollTop = chatbox.scrollHeight;
+  {% endif %}
+});
+
+/* ── Auto-grow textarea ─────────────────────────────────────────────────── */
+chatInput.addEventListener("input", function () {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 160) + "px";
+});
+chatInput.addEventListener("keydown", function (e) {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    if (this.value.trim()) chatForm.dispatchEvent(new Event("submit"));
+  }
+});
+
+/* ── Thread navigation ──────────────────────────────────────────────────── */
+function selectThread(threadId) {
+  toggleSidebar(false);
+  if (threadId === THREAD_ID) return;
+  THREAD_ID = threadId;
+  history.pushState({}, "", "?agent=" + AGENT_NAME + "&thread_id=" + threadId);
+  window.location.reload();
+}
+
+/* ── New thread ─────────────────────────────────────────────────────────── */
+function newThread() {
+  toggleSidebar(false);
+  const id = "thread-" + Date.now();
+  window.location.href = "?agent=" + AGENT_NAME + "&thread_id=" + id;
+}
+
+/* ── Switch agent WITHOUT page reload ───────────────────────────────────── */
+async function switchAgent(name) {
+  if (name === AGENT_NAME) return;
+
+  const sel = document.getElementById("agent-switcher");
+  const opt = sel ? sel.querySelector(`option[value="${name}"]`) : null;
+  const label = opt ? (opt.dataset.label || name) : name;
+
+  // Update state
+  AGENT_NAME  = name;
+  AGENT_LABEL = label;
+  THREAD_ID   = "thread-" + Date.now();
+
+  // Update URL without reload
+  history.pushState({}, "", "?agent=" + name + "&thread_id=" + THREAD_ID);
+
+  // Update header
+  const nameLabel = document.getElementById("agent-name-label");
+  if (nameLabel) nameLabel.textContent = label;
+
+  // Clear chat, show fresh welcome
+  clearChat(label);
+
+  // Refresh thread list from API
+  await refreshThreadList(name);
+}
+
+/* ── Refresh sidebar thread list via API ────────────────────────────────── */
+async function refreshThreadList(agentName) {
+  const listEl = document.getElementById("thread-list");
+  if (!listEl) return;
+
+  listEl.innerHTML = '<div class="ai-threads-loading"><div class="ai-spin"></div> Loading…</div>';
+
+  try {
+    const r = await fetch(URL_THREADS + "?agent=" + encodeURIComponent(agentName));
+    if (!r.ok) throw new Error(r.statusText);
+    const data = await r.json();
+
+    if (!data.persist) {
+      listEl.innerHTML = `<div class="ai-no-threads">
+        <span class="material-symbols-rounded msr">history_toggle_off</span>
+        Enable <code style="font-size:.7rem;color:var(--c-accent)">PERSIST_MESSAGES = True</code>
+      </div>`;
+      return;
+    }
+
+    if (!data.threads || data.threads.length === 0) {
+      listEl.innerHTML = `<div class="ai-no-threads">
+        <span class="material-symbols-rounded msr">forum</span>
+        No conversations yet.<br>Send a message to start!
+      </div>`;
+      return;
+    }
+
+    listEl.innerHTML = data.threads.map(t => `
+      <div class="ai-thread" onclick="selectThread('${t.id}')" data-id="${t.id}">
+        <div class="ai-thread-ico">
+          <span class="material-symbols-rounded msr">chat_bubble</span>
+        </div>
+        <div class="ai-thread-meta">
+          <div class="ai-thread-name" title="${t.title}">${t.title}</div>
+          <div class="ai-thread-date">${t.date}</div>
+        </div>
+        <span class="ai-thread-del">
+          <button class="ai-ico-btn" onclick="deleteThread(event,'${t.id}')"
+                  title="Delete" style="color:var(--c-danger)">
+            <span class="material-symbols-rounded msr">delete</span>
+          </button>
+        </span>
+      </div>
+    `).join("");
+  } catch {
+    listEl.innerHTML = `<div class="ai-no-threads">Could not load threads.</div>`;
+  }
+}
+
+/* ── Clear chat area ─────────────────────────────────────────────────────── */
+function clearChat(agentName) {
+  chatbox.querySelectorAll(".ai-msg-row,.ai-approval-row,.ai-typing-row").forEach(el => el.remove());
+  const chip = document.getElementById("sys-chip");
+  if (chip) chip.textContent = "Started with " + (agentName || AGENT_LABEL);
+  if (document.getElementById("welcome")) return;
+  const w = document.createElement("div");
+  w.id = "welcome"; w.className = "ai-welcome";
+  w.innerHTML = `
+    <div class="ai-welcome-icon">
+      <span class="material-symbols-rounded msr">smart_toy</span>
+    </div>
+    <div class="ai-welcome-title">Hi, I&rsquo;m ${agentName || AGENT_LABEL}</div>
+    <div class="ai-welcome-sub">How can I help you today?</div>`;
+  chatbox.appendChild(w);
+  welcome = w;
+}
+
+/* ── Delete thread ───────────────────────────────────────────────────────── */
+async function deleteThread(e, threadId) {
+  e.preventDefault(); e.stopPropagation();
+  if (!confirm("Delete this conversation?")) return;
+  try {
+    const r = await fetch(URL_DELETE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify({ thread_id: threadId }),
+    });
+    if (r.ok) {
+      if (threadId === THREAD_ID) {
+        newThread();
+      } else {
+        const el = document.querySelector(`.ai-thread[data-id="${threadId}"]`);
+        if (el) el.remove();
+      }
+    } else { alert("Could not delete conversation."); }
+  } catch { alert("Error deleting conversation."); }
+}
+
+/* ── Append message ──────────────────────────────────────────────────────── */
+function appendMessage(sender, text, modelName) {
+  if (welcome && welcome.parentNode) { welcome.remove(); welcome = null; }
+
+  const row = document.createElement("div");
+  row.className = "ai-msg-row " + sender;
+  const isRTL = /[\u0600-\u06FF]/.test(text);
+  const dir = isRTL ? ' dir="rtl"' : "";
+
+  if (sender === "user") {
+    const esc = text.replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\n/g,"<br>");
+    row.innerHTML =
+      `<div class="ai-avatar"><span class="material-symbols-rounded msr">person</span></div>
+       <div class="ai-msg-body">
+         <div class="ai-msg-meta">You</div>
+         <div class="ai-bubble user"${dir}><p>${esc}</p></div>
+       </div>`;
+  } else {
+    const badge = modelName
+      ? `<span class="ai-model-badge"><span class="material-symbols-rounded msr">memory</span>${modelName}</span>`
+      : "";
+    row.innerHTML =
+      `<div class="ai-avatar"><span class="material-symbols-rounded msr">smart_toy</span></div>
+       <div class="ai-msg-body">
+         <div class="ai-msg-meta">${AGENT_LABEL} ${badge}</div>
+         <div class="ai-bubble agent ai-prose"${dir}>${marked.parse(text)}</div>
+       </div>`;
+  }
+  chatbox.appendChild(row);
+  chatbox.scrollTop = chatbox.scrollHeight;
+  return row;
+}
+
+/* ── sendMessage ─────────────────────────────────────────────────────────── */
+async function sendMessage(e) {
+  e.preventDefault();
+  const message = chatInput.value.trim();
+  if (!message) return;
+
+  appendMessage("user", message);
+  chatInput.value = ""; chatInput.style.height = "auto";
+  chatInput.disabled = true; sendBtn.disabled = true;
+
+  const tid = "typing-" + Date.now();
+  const typingEl = document.createElement("div");
+  typingEl.id = tid; typingEl.className = "ai-typing-row";
+  typingEl.innerHTML =
+    `<div class="ai-avatar" style="background:var(--c-user-grad)">
+       <span class="material-symbols-rounded msr">smart_toy</span>
+     </div>
+     <div class="ai-typing-dots"><span></span><span></span><span></span></div>`;
+  chatbox.appendChild(typingEl);
+  chatbox.scrollTop = chatbox.scrollHeight;
+
+  const removeTyping = () => { const el = document.getElementById(tid); if (el) el.remove(); };
+
+  try {
+    const resp = await fetch(URL_CHAT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify({ agent: AGENT_NAME, message, thread_id: THREAD_ID }),
+    });
+    if (!resp.ok) {
+      removeTyping();
+      appendMessage("agent", `**Error ${resp.status}:** ${resp.statusText}`);
+      return;
+    }
+    await readSSE(resp, removeTyping);
+  } catch {
+    removeTyping();
+    appendMessage("agent", "**Error:** Could not connect to AI service.");
+  } finally {
+    chatInput.disabled = false; sendBtn.disabled = false; chatInput.focus();
+  }
+}
+
+/* ── SSE reader ─────────────────────────────────────────────────────────── */
+async function readSSE(resp, onFirstToken) {
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "", bubble = null, content = "", uid = "", fired = false;
+
+  function ensureBubble() {
+    if (bubble) return;
+    if (!fired && onFirstToken) { onFirstToken(); fired = true; }
+    if (welcome && welcome.parentNode) { welcome.remove(); welcome = null; }
+    uid = "s-" + Date.now() + "-" + Math.random().toString(36).slice(2, 7);
+    const row = document.createElement("div");
+    row.className = "ai-msg-row agent";
+    row.innerHTML =
+      `<div class="ai-avatar" style="background:var(--c-user-grad)">
+         <span class="material-symbols-rounded msr">smart_toy</span>
+       </div>
+       <div class="ai-msg-body">
+         <div class="ai-msg-meta" id="${uid}-meta">${AGENT_LABEL}</div>
+         <div class="ai-bubble agent ai-prose" id="${uid}"></div>
+       </div>`;
+    chatbox.appendChild(row);
+    bubble = document.getElementById(uid);
+  }
+
+  function addBadge(name) {
+    if (!name || !uid) return;
+    const meta = document.getElementById(uid + "-meta");
+    if (meta && !meta.querySelector(".ai-model-badge")) {
+      meta.innerHTML +=
+        ` <span class="ai-model-badge"><span class="material-symbols-rounded msr">memory</span>${name}</span>`;
+    }
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const lines = buf.split("\n");
+    buf = lines.pop();
+    let evt = null;
+    for (const line of lines) {
+      if (line.startsWith("event:")) { evt = line.slice(6).trim(); }
+      else if (line.startsWith("data:")) {
+        try {
+          const d = JSON.parse(line.slice(5).trim());
+          if (evt === "token") {
+            ensureBubble();
+            content += d.text || "";
+            bubble.innerHTML = marked.parse(content);
+            if (/[\u0600-\u06FF]/.test(content)) bubble.setAttribute("dir", "rtl");
+            if (d.model_name) addBadge(d.model_name);
+            chatbox.scrollTop = chatbox.scrollHeight;
+          } else if (evt === "tool_approval") {
+            if (!fired && onFirstToken) { onFirstToken(); fired = true; }
+            renderApproval(d);
+          } else if (evt === "done") {
+            if (d && d.model_name) addBadge(d.model_name);
+          } else if (evt === "error") {
+            if (!fired && onFirstToken) { onFirstToken(); fired = true; }
+            appendMessage("agent", `**Error:** ${d.message}`);
+          }
+        } catch {}
+        evt = null;
+      }
+    }
+  }
+}
+
+/* ── Tool approval ───────────────────────────────────────────────────────── */
+function renderApproval(data) {
+  const row = document.createElement("div");
+  row.className = "ai-approval-row";
+  const tools = (data.tool_calls || []).map(tc => {
+    const label = tc.human_label || tc.name;
+    const dir = /[\u0600-\u06FF]/.test(label) ? ' dir="rtl"' : "";
+    return `<div class="ai-approval-tool"${dir}>🔧 ${marked.parseInline(label)}</div>`;
+  }).join("");
+  const ids = (data.tool_calls || []).map(tc => tc.id);
+  row.innerHTML =
+    `<div class="ai-avatar" style="background:#b45309;color:#fef3c7;margin-top:4px">
+       <span class="material-symbols-rounded msr">gavel</span>
+     </div>
+     <div class="ai-approval-card">
+       <div class="ai-approval-ttl">
+         <span class="material-symbols-rounded msr">warning</span>
+         Approve the following action(s)?
+       </div>
+       ${tools}
+       <div class="ai-approval-actions">
+         <button class="ai-btn-approve" onclick='handleApproval(this,${JSON.stringify(ids)},"approve")'>✅ Approve</button>
+         <button class="ai-btn-deny"    onclick='handleApproval(this,${JSON.stringify(ids)},"deny")'>❌ Deny</button>
+       </div>
+     </div>`;
+  chatbox.appendChild(row);
+  chatbox.scrollTop = chatbox.scrollHeight;
+}
+
+async function handleApproval(btn, ids, action) {
+  const card = btn.closest(".ai-approval-card");
+  if (!card) return;
+  card.querySelectorAll("button").forEach(b => b.disabled = true);
+  card.querySelector(".ai-approval-actions").innerHTML =
+    `<span style="font-size:.77rem;color:var(--secondary-fg);font-style:italic">
+      ${action === "approve" ? "✅ Approved — resuming…" : "❌ Denied — resuming…"}
+     </span>`;
+  const decisions = {};
+  ids.forEach(id => decisions[id] = action);
+  try {
+    const resp = await fetch(URL_APPROVE, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": CSRF },
+      body: JSON.stringify({ agent: AGENT_NAME, thread_id: THREAD_ID, decisions }),
+    });
+    if (!resp.ok) {
+      appendMessage("agent", `**Error ${resp.status}:** ${resp.statusText}`);
+      return;
+    }
+    await readSSE(resp, null);
+  } catch {
+    appendMessage("agent", "**Error:** Could not resume after approval.");
+  }
+}
+</script>
+{% endif %}
+{% endblock %}

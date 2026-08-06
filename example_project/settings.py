@@ -42,13 +42,13 @@ DATABASES = {
 # django-langgraph-agent Configuration
 # ──────────────────────────────────────────────────────────────────────────────
 DJANGO_LANGGRAPH_AGENT = {
-    "OPENROUTER_API_KEY": "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",
-    "DEFAULT_MODEL": "google/gemini-2.5-flash-preview",
+    "OPENROUTER_API_KEY": os.environ.get("OPENROUTER_API_KEY", ""),
+    "DEFAULT_MODEL": "google/gemini-2.5-flash",
     "FALLBACK_MODELS": [
-        "google/gemini-2.5-flash",
         "deepseek/deepseek-chat",
+        "openai/gpt-4o-mini",
     ],
-    "SUMMARIZER_MODEL": "deepseek/deepseek-chat",
+    "SUMMARIZER_MODEL": "google/gemini-2.5-flash",
     "MAX_TOKENS": 800,
     "SUMMARY_THRESHOLD": 6,
     "SITE_URL": "http://localhost:8000",
@@ -90,17 +90,23 @@ UNFOLD = {
         "show_all_applications": True,
         "navigation": [
             {
-                "title": "🤖 AI Agents & Conversations",
+                "title": "🤖 AI Chat",
                 "separator": True,
                 "items": [
                     {
-                        "title": "Admin AI Chat Workspace",
-                        "icon": "forum",
+                        "title": "Open Chat",
+                        "icon": "smart_toy",
                         "link": lambda request: "/admin/ai-chat/",
                     },
+                ],
+            },
+            {
+                "title": "⚙️ Agent Configuration",
+                "separator": True,
+                "items": [
                     {
                         "title": "Agent Configurations",
-                        "icon": "smart_toy",
+                        "icon": "tune",
                         "link": lambda request: "/admin/django_langgraph_agent/agentconfig/",
                     },
                     {
