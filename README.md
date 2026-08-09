@@ -11,9 +11,10 @@ Battle-tested in internal workflows at [Tathbeet](https://tathbeet.space) — a 
 
 ---
 
-## Features
 
-![Django AI Agent Dashboard Chat UI](docs/assets/admin-chat-ui.png)
+<img width="1024" height="642" alt="admin-chat-ui" src="https://github.com/user-attachments/assets/417ee3b8-b4b9-4059-9bf5-b804aad2cb3f" />
+
+## Features
 
 - ⚙️ **Admin-Managed Agents** — create and customize agents from the Django Admin UI without code changes
 - 🔌 **Zero-Boilerplate API & UI** — built-in SSE chat endpoints & admin-integrated Chat UI (`include("django_langgraph_agent.urls")`)
