@@ -57,7 +57,7 @@ def test_agent_config_to_django_agent():
 
 
 @pytest.mark.django_db
-def test_list_agents_api_endpoint(client):
+def test_list_agents_api_endpoint(staff_client):
     """GET /api/agent/ returns active agents."""
     AgentConfig.objects.create(
         name="agent-one", display_name="Agent One", system_prompt="One", is_active=True
@@ -66,7 +66,7 @@ def test_list_agents_api_endpoint(client):
         name="agent-two", display_name="Agent Two", system_prompt="Two", is_active=False
     )
 
-    response = client.get("/api/agent/")
+    response = staff_client.get("/api/agent/")
     assert response.status_code == 200
     data = response.json()
     assert len(data["agents"]) == 1
@@ -93,13 +93,13 @@ def test_agent_config_allowed_models_and_blocked_fields():
 
 
 @pytest.mark.django_db
-def test_delete_thread_view(client):
+def test_delete_thread_view(staff_client):
     """POST /api/agent/chat/delete/ deletes ChatThread and its messages."""
     agent = AgentConfig.objects.create(name="test-del", display_name="Test Del", system_prompt="Test")
     thread = ChatThread.objects.create(thread_id="thread-del-123", agent=agent)
     ChatMessage.objects.create(thread=thread, text="Hello", is_user=True)
 
-    response = client.post(
+    response = staff_client.post(
         "/api/agent/chat/delete/",
         data=json.dumps({"thread_id": "thread-del-123"}),
         content_type="application/json",
@@ -136,7 +136,7 @@ def test_chat_page_view_staff_can_access(client, django_user_model):
 
 
 @pytest.mark.django_db
-def test_get_threads_view(client):
+def test_get_threads_view(staff_client):
     """GET /api/agent/chat/threads/?agent=<name> returns JSON thread list."""
     agent = AgentConfig.objects.create(
         name="test-agent", display_name="Test Agent", system_prompt="Test", is_active=True
@@ -145,7 +145,7 @@ def test_get_threads_view(client):
     ChatMessage.objects.create(thread=thread, text="Hello world from user", is_user=True)
 
     with override_settings(DJANGO_LANGGRAPH_AGENT={"PERSIST_MESSAGES": True}):
-        response = client.get("/api/agent/chat/threads/?agent=test-agent")
+        response = staff_client.get("/api/agent/chat/threads/?agent=test-agent")
         assert response.status_code == 200
         data = response.json()
         assert data["persist"] is True

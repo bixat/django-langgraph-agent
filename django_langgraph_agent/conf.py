@@ -4,7 +4,9 @@ django_langgraph_agent/conf.py
 Settings reader for django-langgraph-agent.
 """
 
+from django.core.signals import setting_changed
 from django.conf import settings as django_settings
+from django.dispatch import receiver
 
 DEFAULTS = {
     "OPENROUTER_API_KEY": None,
@@ -19,6 +21,30 @@ DEFAULTS = {
     "MODEL_WHITELIST": {},
     "BLOCKED_FIELD_SUBSTRINGS": ["password", "token", "secret", "is_superuser", "is_staff"],
     "PERSIST_MESSAGES": False,
+
+    # ── Built-in API endpoint security ───────────────────────────────────────
+    # Who may call the SSE endpoints exposed by include("django_langgraph_agent.urls").
+    #   "staff"          → request.user.is_staff (default — matches the chat UI)
+    #   "authenticated"  → any logged-in user
+    #   "public"         → no check (opt-in; these endpoints drive the ORM tools)
+    #   "app.module.fn"  → dotted path to callable(request) -> bool
+    "API_PERMISSION": "staff",
+    # CSRF stays on by default; the bundled chat template already sends X-CSRFToken.
+    "API_CSRF_EXEMPT": False,
+    # Trust a client-supplied "user_id" in the request body when the caller is
+    # not authenticated. Off by default — it lets a caller impersonate any user.
+    "TRUST_BODY_USER_ID": False,
+
+    # ── Row-level scoping for the built-in ORM tools ─────────────────────────
+    # callable(model, config) -> QuerySet | dict of filter kwargs | None
+    #   Returns the base queryset every read/update is restricted to.
+    #   Return None to leave that model unscoped; return model.objects.none()
+    #   to deny access outright.
+    "QUERYSET_SCOPE": None,
+    # callable(model, config) -> dict of field values force-applied to every
+    # add_record / update_record write (e.g. {"organization_id": 7}). Applied
+    # after field validation, so concrete "<fk>_id" keys are allowed here.
+    "WRITE_DEFAULTS": None,
 }
 
 
@@ -52,4 +78,11 @@ class _AgentSettings:
 
 
 agent_settings = _AgentSettings()
+
+
+@receiver(setting_changed)
+def _reset_on_setting_changed(sender, setting, **kwargs):
+    """Drops the cache when DJANGO_LANGGRAPH_AGENT changes (override_settings)."""
+    if setting in ("DJANGO_LANGGRAPH_AGENT", "DJANGO_AI_AGENT"):
+        agent_settings._cache = {}
 

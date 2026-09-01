@@ -19,6 +19,7 @@ from decimal import Decimal
 from typing import Any
 
 from django.apps import apps
+from django.utils.module_loading import import_string
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 
@@ -243,24 +244,91 @@ def _validate_write_keys(model_name: str, data: dict, allowed_models: list | Non
             )
 
 
+def _to_jsonable(val):
+    """
+    Coerces a single field value into something json.dumps can handle.
+
+    Only str/int/float/bool/None survive untouched. Everything else falls back
+    to str() — without that fallback a single unrecognised field type (a
+    PhoneNumber, UUID, FileField, enum, timedelta…) makes the whole tool fail,
+    and the model tends to paper over the error with invented data.
+    """
+    if val is None or isinstance(val, (str, bool, int, float)):
+        return val
+    if isinstance(val, Decimal):
+        return str(val)
+    if hasattr(val, "isoformat"):
+        return val.isoformat()
+    if hasattr(val, "pk"):
+        return val.pk
+    return str(val)
+
+
 def _serialize_qs(qs, field_names: list[str]) -> list[dict]:
     results = []
     for obj in qs:
         row = {}
         for fname in field_names:
             try:
-                val = getattr(obj, fname)
-                if isinstance(val, Decimal):
-                    val = str(val)
-                elif hasattr(val, "isoformat"):
-                    val = val.isoformat()
-                elif hasattr(val, "pk"):
-                    val = val.pk
-                row[fname] = val
+                row[fname] = _to_jsonable(getattr(obj, fname))
             except Exception:
                 row[fname] = None
         results.append(row)
     return results
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Row-Level Scoping Hooks
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _resolve_hook(setting_name: str):
+    """Returns the configured hook callable for `setting_name`, or None."""
+    value = getattr(agent_settings, setting_name, None)
+    if not value:
+        return None
+    if callable(value):
+        return value
+    if isinstance(value, str):
+        return import_string(value)
+    raise ValueError(
+        f"DJANGO_LANGGRAPH_AGENT['{setting_name}'] must be a callable or a dotted path."
+    )
+
+
+def _scoped_queryset(model, config: Any):
+    """
+    Returns the base queryset for `model`, narrowed by QUERYSET_SCOPE.
+
+    MODEL_WHITELIST / allowed_models / blocked_fields constrain *which models
+    and fields* are reachable; this is the row-level equivalent, and it is the
+    only place tenancy can be enforced server-side — a system-prompt
+    instruction to "always filter by organization" is a suggestion the model
+    can and does drop.
+    """
+    base = model._default_manager.all()
+    hook = _resolve_hook("QUERYSET_SCOPE")
+    if hook is None:
+        return base
+
+    scope = hook(model, config)
+    if scope is None:
+        return base                       # hook opts this model out of scoping
+    if isinstance(scope, dict):
+        return base.filter(**scope)
+    return scope
+
+
+def _write_defaults(model, config: Any) -> dict:
+    """
+    Returns field values forced onto every write for `model` (WRITE_DEFAULTS).
+
+    Applied *after* key validation so a hook can set concrete `<fk>_id` keys,
+    which the `fields` allowlist would otherwise reject.
+    """
+    hook = _resolve_hook("WRITE_DEFAULTS")
+    if hook is None:
+        return {}
+    return hook(model, config) or {}
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -329,7 +397,7 @@ def query_records(
         _validate_filter_keys(model_name, filters, allowed_models=allowed_models, blocked_fields=blocked_fields)
 
         accessible_fields = _get_accessible_fields(model_name, model, allowed_models=allowed_models, blocked_fields=blocked_fields)
-        qs = model.objects.filter(**filters)
+        qs = _scoped_queryset(model, config).filter(**filters)
 
         try:
             qs = qs.order_by(order_by)
@@ -351,6 +419,7 @@ def query_records(
             },
             indent=2,
             ensure_ascii=False,
+            default=str,
         )
 
     except Exception as exc:
@@ -386,7 +455,7 @@ def aggregate_model_records(
 
         _validate_filter_keys(model_name, filters, allowed_models=allowed_models, blocked_fields=blocked_fields)
 
-        qs = model.objects.filter(**filters)
+        qs = _scoped_queryset(model, config).filter(**filters)
 
         if not aggregations:
             return f"Total matching records for {model_name}: {qs.count()}"
@@ -421,16 +490,9 @@ def aggregate_model_records(
                 return f"Error: Unknown aggregation type '{agg_type}'."
 
         raw_result = qs.aggregate(**agg_dict)
-        serialized_result = {}
-        for k, v in raw_result.items():
-            if isinstance(v, Decimal):
-                serialized_result[k] = str(v)
-            elif hasattr(v, "isoformat"):
-                serialized_result[k] = v.isoformat()
-            else:
-                serialized_result[k] = v
+        serialized_result = {k: _to_jsonable(v) for k, v in raw_result.items()}
 
-        return f"Aggregation Results for {model_name}:\n{json.dumps(serialized_result, indent=2, ensure_ascii=False)}"
+        return f"Aggregation Results for {model_name}:\n{json.dumps(serialized_result, indent=2, ensure_ascii=False, default=str)}"
     except Exception as exc:
         logger.warning("aggregate_model_records error for model '%s': %s", model_name, exc)
         return f"Error: {exc}"
@@ -450,12 +512,13 @@ def add_record(model_name: str, data_json: str, config: RunnableConfig = None) -
         model = _get_model_class(model_name, allowed_models=allowed_models)
         data = json.loads(data_json)
         _validate_write_keys(model_name, data, allowed_models=allowed_models, blocked_fields=blocked_fields)
+        data.update(_write_defaults(model, config))   # authoritative, overrides the model
 
         obj = model.objects.create(**data)
         accessible_fields = _get_accessible_fields(model_name, model, allowed_models=allowed_models, blocked_fields=blocked_fields)
         serialized = _serialize_qs([obj], accessible_fields)[0]
 
-        return f"✅ Created {model_name} #{obj.pk}:\n{json.dumps(serialized, indent=2, ensure_ascii=False)}"
+        return f"✅ Created {model_name} #{obj.pk}:\n{json.dumps(serialized, indent=2, ensure_ascii=False, default=str)}"
 
     except Exception as exc:
         logger.warning("add_record error for model '%s': %s", model_name, exc)
@@ -479,8 +542,9 @@ def update_record(model_name: str, record_id: Any = None, data_json: str = "{}",
         model = _get_model_class(model_name, allowed_models=allowed_models)
         data = json.loads(data_json)
         _validate_write_keys(model_name, data, allowed_models=allowed_models, blocked_fields=blocked_fields)
+        data.update(_write_defaults(model, config))   # authoritative, overrides the model
 
-        obj = model.objects.get(pk=target_pk)
+        obj = _scoped_queryset(model, config).get(pk=target_pk)
         for key, val in data.items():
             setattr(obj, key, val)
         obj.save(update_fields=list(data.keys()))
@@ -488,7 +552,7 @@ def update_record(model_name: str, record_id: Any = None, data_json: str = "{}",
         accessible_fields = _get_accessible_fields(model_name, model, allowed_models=allowed_models, blocked_fields=blocked_fields)
         serialized = _serialize_qs([obj], accessible_fields)[0]
 
-        return f"✅ Updated {model_name} #{obj.pk}:\n{json.dumps(serialized, indent=2, ensure_ascii=False)}"
+        return f"✅ Updated {model_name} #{obj.pk}:\n{json.dumps(serialized, indent=2, ensure_ascii=False, default=str)}"
 
     except Exception as exc:
         logger.warning("update_record error for model '%s', pk '%s': %s", model_name, target_pk, exc)
