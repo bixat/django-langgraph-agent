@@ -19,6 +19,61 @@ from .conf import agent_settings
 logger = logging.getLogger(__name__)
 
 
+def _provider_routing() -> dict | None:
+    """
+    Normalises DJANGO_LANGGRAPH_AGENT["OPENROUTER_PROVIDER"] into OpenRouter's
+    provider object.
+
+    A bare string ("google-ai-studio") or a list of them is shorthand for
+    {"order": [...]} — the common case, pinning the upstream route.
+    """
+    provider = getattr(agent_settings, "OPENROUTER_PROVIDER", None)
+    if not provider:
+        return None
+    if isinstance(provider, str):
+        return {"order": [provider]}
+    if isinstance(provider, (list, tuple)):
+        return {"order": list(provider)}
+    if isinstance(provider, dict):
+        return provider
+    raise ValueError(
+        "DJANGO_LANGGRAPH_AGENT['OPENROUTER_PROVIDER'] must be a str, list or dict, "
+        f"got {type(provider).__name__}."
+    )
+
+
+def _extra_body() -> dict:
+    """Merges EXTRA_BODY with the normalised provider routing."""
+    body = dict(getattr(agent_settings, "EXTRA_BODY", None) or {})
+    provider = _provider_routing()
+    if provider is not None:
+        body["provider"] = provider
+    return body
+
+
+def _chat_openai_kwargs(model_name: str, max_tok: int, title: str, site_url: str) -> dict:
+    """Builds the full ChatOpenAI(**kwargs) for one model."""
+    kwargs = {
+        "openai_api_base": getattr(
+            agent_settings, "OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"
+        ),
+        "openai_api_key": agent_settings.OPENROUTER_API_KEY,
+        "model_name": model_name,
+        "max_tokens": max_tok,
+        "max_retries": 3,
+        "request_timeout": 30.0,
+        "default_headers": {
+            "HTTP-Referer": site_url,
+            "X-Title": title,
+        },
+    }
+    extra_body = _extra_body()
+    if extra_body:
+        kwargs["extra_body"] = extra_body
+    kwargs.update(getattr(agent_settings, "MODEL_KWARGS", None) or {})
+    return kwargs
+
+
 def build_llm(model: str | None = None, title: str | None = None, max_tokens: int | None = None):
     """
     Returns a ChatOpenAI LLM configured for OpenRouter with a fallback chain.
@@ -50,18 +105,7 @@ def build_llm(model: str | None = None, title: str | None = None, max_tokens: in
     max_tok = max_tokens or agent_settings.MAX_TOKENS
 
     def _make(model_name: str) -> ChatOpenAI:
-        return ChatOpenAI(
-            openai_api_base="https://openrouter.ai/api/v1",
-            openai_api_key=api_key,
-            model_name=model_name,
-            max_tokens=max_tok,
-            max_retries=3,
-            request_timeout=30.0,
-            default_headers={
-                "HTTP-Referer": site_url,
-                "X-Title": site_title,
-            },
-        )
+        return ChatOpenAI(**_chat_openai_kwargs(model_name, max_tok, site_title, site_url))
 
     primary_model = model.strip() if (model and isinstance(model, str) and model.strip()) else agent_settings.DEFAULT_MODEL
     primary = _make(primary_model)
@@ -87,14 +131,10 @@ def build_summarizer_llm():
         raise ValueError("OPENROUTER_API_KEY is not configured.")
 
     return ChatOpenAI(
-        openai_api_base="https://openrouter.ai/api/v1",
-        openai_api_key=api_key,
-        model_name=agent_settings.SUMMARIZER_MODEL,
-        max_tokens=300,
-        max_retries=3,
-        request_timeout=30.0,
-        default_headers={
-            "HTTP-Referer": agent_settings.SITE_URL,
-            "X-Title": f"{agent_settings.SITE_TITLE} Summarizer",
-        },
+        **_chat_openai_kwargs(
+            agent_settings.SUMMARIZER_MODEL,
+            300,
+            f"{agent_settings.SITE_TITLE} Summarizer",
+            agent_settings.SITE_URL,
+        )
     )

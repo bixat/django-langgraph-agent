@@ -11,6 +11,8 @@ Two agents are defined here:
 from django_langgraph_agent import DjangoAgent
 from django_langgraph_agent.tools import DjangoORMToolkit
 
+from .tools import apply_discount, check_low_stock, send_order_confirmation
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Customer-Facing Agent (read-only)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -26,7 +28,8 @@ store_agent = DjangoAgent(
         "Format prices with a $ sign. "
         "Never reveal internal fields like cost_price or payment_reference."
     ),
-    tools=_read_toolkit.tools,
+    # Custom tools sit alongside the built-in ORM tools — just add them to the list.
+    tools=_read_toolkit.tools + [check_low_stock],
 )
 
 
@@ -40,13 +43,16 @@ store_admin_agent = DjangoAgent(
     name="store_admin",
     system_prompt=(
         "You are the store admin AI assistant. "
-        "You can query, create, and update products and orders. "
+        "You can query, create, and update products and orders, "
+        "check which products are running low, discount a product, and email order confirmations. "
         "⚠️ Always confirm with the user before making any changes. "
         "Be precise about what data you're modifying."
     ),
-    tools=_admin_toolkit.tools,
-    # Write tools require explicit user approval
-    approval_tools=_admin_toolkit.approval_tools,
+    tools=_admin_toolkit.tools + [check_low_stock, apply_discount, send_order_confirmation],
+    # Write tools require explicit user approval. Custom tools that change data
+    # or reach the outside world belong here too — approval is opt-in per tool,
+    # so anything omitted runs unattended.
+    approval_tools=list(_admin_toolkit.approval_tools) + ["apply_discount", "send_order_confirmation"],
 )
 
 
@@ -83,5 +89,20 @@ def _dynamic_state_modifier(state: dict, config: dict):
 personalized_agent = DjangoAgent(
     name="store_personalized",
     system_prompt=_dynamic_state_modifier,  # callable, not string
-    tools=_read_toolkit.tools,
+    tools=_read_toolkit.tools + [check_low_stock],
 )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# The DB-backed path
+#
+# Agents created in the admin (AgentConfig) don't list tool objects — they list
+# tool *names* in `extra_tools`, resolved through the registry at build time.
+# For the tools above that is:
+#
+#     extra_tools          = ["check_low_stock", "apply_discount", "send_order_confirmation"]
+#     extra_approval_tools = ["apply_discount", "send_order_confirmation"]
+#
+# The names only appear in the admin because StoreConfig.ready() imports
+# store/tools.py — see store/apps.py.
+# ──────────────────────────────────────────────────────────────────────────────

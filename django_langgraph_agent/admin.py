@@ -9,6 +9,7 @@ import json
 
 from django import forms
 from django.apps import apps
+from django.conf import settings as django_settings
 from django.contrib import admin
 from django.utils.html import format_html
 from django.utils.safestring import mark_safe
@@ -26,25 +27,113 @@ from .models import AgentConfig, ChatMessage, ChatThread
 # Helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _get_all_django_models():
-    """Returns a list of dict items for all installed Django models."""
-    models_list = []
+# Infrastructure apps whose models are never useful to an agent.
+_INFRA_APP_LABELS = (
+    "django_langgraph_agent",
+    "django_ai_agent",
+    "admin",
+    "sessions",
+    "contenttypes",
+)
+
+# Additionally excluded when suggesting *models* to expose to an agent.
+_SENSITIVE_APP_LABELS = ("auth", "token_blacklist")
+
+
+def _is_infra_model(model_cls) -> bool:
+    return model_cls._meta.app_label in _INFRA_APP_LABELS
+
+
+def _is_excluded_model(model_cls) -> bool:
+    """
+    True for models that must never be *suggested* to an agent.
+
+    Beyond the infrastructure apps this covers auth and AUTH_USER_MODEL:
+    offering the user model invites exposing password hashes and is_superuser.
+    BLOCKED_FIELD_SUBSTRINGS happens to cover those exact names, but the model
+    should not be proposed in the first place. A project that genuinely wants it
+    can still say so explicitly in MODEL_WHITELIST, which wins over this.
+    """
+    if _is_infra_model(model_cls) or model_cls._meta.app_label in _SENSITIVE_APP_LABELS:
+        return True
+
+    auth_user_model = getattr(django_settings, "AUTH_USER_MODEL", None)
+    return bool(auth_user_model) and model_cls._meta.label_lower == auth_user_model.lower()
+
+
+def _resolve_whitelisted_model(key: str, conf):
+    """
+    Resolves one MODEL_WHITELIST entry to its model class, or None.
+
+    Mirrors tools.django_orm._get_model_class: keys may be bare ("Product") or
+    dotted ("store.Product"), and the app label may come from the config dict.
+    """
+    conf = conf if isinstance(conf, dict) else {}
+    object_name = conf.get("object_name") or key.split(".")[-1]
+    app_label = conf.get("app_label") or (key.split(".")[0] if "." in key else None)
+
+    if app_label:
+        try:
+            return apps.get_model(app_label, object_name)
+        except LookupError:
+            pass
     for model_cls in apps.get_models():
-        app_label = model_cls._meta.app_label
-        if app_label in ("django_langgraph_agent", "django_ai_agent", "admin", "sessions", "contenttypes"):
-            continue
-        label = f"{app_label}.{model_cls._meta.object_name}"
-        display = f"{app_label} | {model_cls._meta.verbose_name.title()} ({model_cls._meta.object_name})"
-        models_list.append({"value": label, "label": display})
-    return sorted(models_list, key=lambda x: x["value"])
+        if model_cls._meta.object_name.lower() == object_name.lower():
+            return model_cls
+    return None
+
+
+def _whitelisted_models() -> list[tuple[str, object]] | None:
+    """
+    Returns [(whitelist key, model class or None)], or None when MODEL_WHITELIST
+    is empty.
+
+    `allowed_models` can only ever *narrow* MODEL_WHITELIST — the ORM tools raise
+    for anything absent from it — so when a whitelist exists it is the only
+    meaningful source for the widget.
+    """
+    whitelist = getattr(agent_settings, "MODEL_WHITELIST", None) or {}
+    if not whitelist or not isinstance(whitelist, dict):
+        return None
+    return [(key, _resolve_whitelisted_model(key, conf)) for key, conf in whitelist.items()]
+
+
+def _model_choice(key: str, model_cls) -> dict:
+    """Builds one autocomplete item for a model, falling back to the raw key."""
+    if model_cls is None:
+        return {"value": key, "label": key}
+    app_label = model_cls._meta.app_label
+    return {
+        "value": f"{app_label}.{model_cls._meta.object_name}",
+        "label": f"{app_label} | {model_cls._meta.verbose_name.title()} ({model_cls._meta.object_name})",
+    }
+
+
+def _get_all_django_models():
+    """
+    Returns autocomplete items for the models an agent may be granted.
+
+    Sourced from MODEL_WHITELIST when one is configured, so the widget can only
+    offer models that actually work; otherwise every installed model minus the
+    infrastructure apps, auth, and AUTH_USER_MODEL.
+    """
+    whitelisted = _whitelisted_models()
+    if whitelisted is not None:
+        items = [_model_choice(key, model_cls) for key, model_cls in whitelisted]
+    else:
+        items = [
+            _model_choice(model_cls._meta.label, model_cls)
+            for model_cls in apps.get_models()
+            if not _is_excluded_model(model_cls)
+        ]
+    return sorted(items, key=lambda x: x["value"])
 
 
 def _get_all_model_fields():
     """Returns a list of all unique field names across project models."""
     fields_set = set()
     for model_cls in apps.get_models():
-        app_label = model_cls._meta.app_label
-        if app_label in ("django_langgraph_agent", "django_ai_agent", "admin", "sessions", "contenttypes"):
+        if _is_infra_model(model_cls):
             continue
         for f in model_cls._meta.get_fields():
             if hasattr(f, "name"):
@@ -321,6 +410,66 @@ class AgentConfigForm(forms.ModelForm):
         script = _autocomplete_script_html()
         original_help = self.fields["allowed_models"].help_text or ""
         self.fields["allowed_models"].help_text = mark_safe(original_help + str(script))
+
+    def clean_allowed_models(self):
+        """
+        Rejects entries the agent could never use, so the mistake surfaces here
+        as a field error rather than later as a tool-call error string the model
+        may paper over with invented data.
+
+        Matching follows tools.django_orm._get_model_config: an entry matches a
+        whitelist key when the part after the last dot is equal, case-insensitively.
+        """
+        value = self.cleaned_data.get("allowed_models") or []
+        if not isinstance(value, list):
+            raise forms.ValidationError(
+                'Allowed models must be a list of "app_label.ModelName" strings.'
+            )
+
+        whitelisted = _whitelisted_models()
+        whitelist_keys = (
+            {key.split(".")[-1].lower() for key, _ in whitelisted}
+            if whitelisted is not None
+            else None
+        )
+
+        not_whitelisted, excluded = [], []
+        for entry in value:
+            if not isinstance(entry, str) or not entry.strip():
+                raise forms.ValidationError(
+                    f"Invalid entry {entry!r} — expected an \"app_label.ModelName\" string."
+                )
+            short_name = entry.split(".")[-1].lower()
+
+            if whitelist_keys is not None:
+                if short_name not in whitelist_keys:
+                    not_whitelisted.append(entry)
+                continue
+
+            # No whitelist configured: the entry just has to resolve to a model
+            # the agent is allowed to see.
+            model_cls = _resolve_whitelisted_model(entry, {})
+            if model_cls is None:
+                not_whitelisted.append(entry)
+            elif _is_excluded_model(model_cls):
+                excluded.append(entry)
+
+        errors = []
+        if not_whitelisted and whitelist_keys is not None:
+            allowed = ", ".join(sorted(key for key, _ in whitelisted))
+            errors.append(
+                f"Not in MODEL_WHITELIST: {', '.join(not_whitelisted)}. Allowed: {allowed}."
+            )
+        elif not_whitelisted:
+            errors.append(f"Unknown model(s): {', '.join(not_whitelisted)}.")
+        if excluded:
+            errors.append(
+                f"These models cannot be exposed to an agent: {', '.join(excluded)}."
+            )
+        if errors:
+            raise forms.ValidationError(" ".join(errors))
+
+        return value
 
 
 # ──────────────────────────────────────────────────────────────────────────────
