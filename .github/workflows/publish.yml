@@ -38,8 +38,11 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
+      # `python -m pytest`, not bare `pytest`: only the module form puts the
+      # working directory on sys.path, and the suite imports example_project,
+      # which is not part of the installed distribution.
       - name: Tests
-        run: pytest -q
+        run: python -m pytest -q
 
   deploy:
     needs: verify

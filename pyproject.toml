@@ -79,6 +79,10 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "example_project.settings"
+# The suite runs against example_project, which is not part of the installed
+# distribution. Without this, only `python -m pytest` works (it puts the
+# working directory on sys.path) and a bare `pytest` fails to import it.
+pythonpath = ["."]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
