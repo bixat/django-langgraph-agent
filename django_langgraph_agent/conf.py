@@ -22,6 +22,26 @@ DEFAULTS = {
     "BLOCKED_FIELD_SUBSTRINGS": ["password", "token", "secret", "is_superuser", "is_staff"],
     "PERSIST_MESSAGES": False,
 
+    # ── Upstream LLM endpoint ────────────────────────────────────────────────
+    # OpenAI-compatible base URL every ChatOpenAI instance is pointed at.
+    # Override to leave OpenRouter entirely (e.g. Google AI Studio's own
+    # OpenAI-compatible endpoint, a local vLLM, or an internal gateway).
+    "OPENROUTER_BASE_URL": "https://openrouter.ai/api/v1",
+    # OpenRouter upstream-provider routing, sent as extra_body["provider"].
+    # Accepts OpenRouter's provider object, e.g.
+    #   {"order": ["google-ai-studio"], "allow_fallbacks": False}
+    # A bare string or list is expanded to {"order": [...]}. Without this,
+    # OpenRouter picks the route itself — for Gemini that is the pricier
+    # Vertex-billed one.
+    "OPENROUTER_PROVIDER": None,
+    # Arbitrary extra JSON merged into every request body (OpenRouter's
+    # "transforms", "route", "reasoning", …). OPENROUTER_PROVIDER wins over a
+    # "provider" key set here.
+    "EXTRA_BODY": {},
+    # Passed straight through to ChatOpenAI(**MODEL_KWARGS) — an escape hatch
+    # for constructor arguments this package does not model.
+    "MODEL_KWARGS": {},
+
     # ── Built-in API endpoint security ───────────────────────────────────────
     # Who may call the SSE endpoints exposed by include("django_langgraph_agent.urls").
     #   "staff"          → request.user.is_staff (default — matches the chat UI)

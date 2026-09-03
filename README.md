@@ -233,6 +233,97 @@ class MyAppConfig(AppConfig):
 
 Now `send_push_notification` will appear in the Django Admin for selection under **Extra Custom Tools**.
 
+The docstring is the prompt the model reads, so describe the arguments and their
+units there rather than in a comment.
+
+**Requiring approval.** A custom tool that writes data or reaches the outside
+world should be gated the same way the built-in write tools are — approval is
+opt-in per tool, so anything you leave out runs unattended:
+
+```python
+# code-defined agents
+DjangoAgent(
+    name="store_admin",
+    tools=toolkit.tools + [apply_discount, send_order_confirmation],
+    approval_tools=list(toolkit.approval_tools) + ["apply_discount", "send_order_confirmation"],
+)
+```
+
+For agents configured in the admin, list the same names under **Extra Custom
+Tools** and **Extra Approval Tools**.
+
+**Reading the request context.** Declare a `config: RunnableConfig = None`
+parameter and the agent's `RunnableConfig` is passed in — that is where
+`thread_id` and `user_id` live:
+
+```python
+@register_tool
+@tool
+def apply_discount(product_id: int, percent: float, config: RunnableConfig = None) -> str:
+    """Reduces a product's price by `percent`."""
+    actor = (config or {}).get("configurable", {}).get("user_id", "anonymous")
+    ...
+```
+
+A complete, runnable set of three custom tools — read-only, write-with-approval,
+and a non-ORM side effect — lives in
+[`example_project/store/tools.py`](example_project/store/tools.py), wired up in
+`store/agents.py` and registered from `store/apps.py`.
+
+---
+
+## Choosing the Upstream Model Provider
+
+Every model is reached through an OpenAI-compatible endpoint, which defaults to
+OpenRouter. Two settings control where requests actually land.
+
+**Pinning the OpenRouter route.** OpenRouter picks the upstream provider itself
+unless you tell it otherwise, and its default pick is not always the cheapest —
+Gemini, for instance, bills through Vertex by default while Google AI Studio is
+a separate, cheaper route:
+
+```python
+DJANGO_LANGGRAPH_AGENT = {
+    # Shorthand: a string or list becomes {"order": [...]}
+    "OPENROUTER_PROVIDER": "google-ai-studio",
+
+    # Or OpenRouter's full provider object
+    "OPENROUTER_PROVIDER": {"order": ["google-ai-studio"], "allow_fallbacks": False},
+}
+```
+
+This applies to the primary model, every fallback model, and the summarizer.
+
+**Leaving OpenRouter entirely.** Point the package at any OpenAI-compatible
+endpoint:
+
+```python
+DJANGO_LANGGRAPH_AGENT = {
+    "OPENROUTER_BASE_URL": "https://generativelanguage.googleapis.com/v1beta/openai",
+    "OPENROUTER_API_KEY": os.environ["GOOGLE_AI_STUDIO_KEY"],
+}
+```
+
+**Anything else.** `EXTRA_BODY` is merged into every request body (OpenRouter's
+`transforms`, `route`, `reasoning`, …) and `MODEL_KWARGS` is passed straight
+through to `ChatOpenAI`:
+
+```python
+DJANGO_LANGGRAPH_AGENT = {
+    "EXTRA_BODY": {"transforms": ["middle-out"]},
+    "MODEL_KWARGS": {"temperature": 0.2},
+}
+```
+
+`OPENROUTER_PROVIDER` wins over a `provider` key set in `EXTRA_BODY`.
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenAI-compatible endpoint |
+| `OPENROUTER_PROVIDER` | `None` | Upstream route, sent as `extra_body["provider"]` |
+| `EXTRA_BODY` | `{}` | Extra JSON merged into every request body |
+| `MODEL_KWARGS` | `{}` | Extra `ChatOpenAI(**kwargs)` |
+
 ---
 
 ## Django Unfold Admin Theme Integration
