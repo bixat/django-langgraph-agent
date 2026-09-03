@@ -76,9 +76,24 @@ def _summarize_node(state: AgentState, config=None, llm=None) -> dict:
         if clean_summary.startswith(prefix):
             clean_summary = clean_summary[len(prefix):].strip()
 
-    # Keep only the last 2 messages (most recent exchange)
+    # Keep only the last 2 messages (most recent exchange), plus the newest
+    # HumanMessage. The graph routes agent → execute_tools → summarize → agent,
+    # so on a tool turn the last two messages are the AIMessage holding the tool
+    # call and its ToolMessage — dropping messages[:-2] would delete the very
+    # question being answered, and the next agent pass would reply with a
+    # generic greeting instead of an answer.
+    newest_question_id = next(
+        (
+            m.id
+            for m in reversed(messages)
+            if isinstance(m, HumanMessage) and getattr(m, "id", None)
+        ),
+        None,
+    )
     delete_messages = [
-        RemoveMessage(id=m.id) for m in messages[:-2] if hasattr(m, "id") and m.id
+        RemoveMessage(id=m.id)
+        for m in messages[:-2]
+        if getattr(m, "id", None) and m.id != newest_question_id
     ]
 
     return {"summary": clean_summary, "messages": delete_messages}

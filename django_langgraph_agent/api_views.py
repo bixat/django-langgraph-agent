@@ -4,6 +4,7 @@ django_langgraph_agent/api_views.py
 Built-in API views for agent SSE chat endpoints and Admin Chat Interface.
 """
 
+import functools
 import json
 import logging
 
@@ -11,13 +12,111 @@ from django.contrib import admin
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import JsonResponse, StreamingHttpResponse
 from django.shortcuts import render, redirect
-from django.views.decorators.csrf import csrf_exempt
+from django.utils.module_loading import import_string
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from .conf import agent_settings
 from .streaming import resume_agent, stream_agent
 
 logger = logging.getLogger(__name__)
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Endpoint Guard
+#
+# These endpoints drive the ORM tools — they can read, create and update any
+# whitelisted model — so they are protected by default. Policy comes from
+# DJANGO_LANGGRAPH_AGENT["API_PERMISSION"] and is evaluated per request, so
+# settings changes (and override_settings in tests) take effect immediately.
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _permission_denied(request):
+    """Returns a JsonResponse if the caller may not use the API, else None."""
+    perm = getattr(agent_settings, "API_PERMISSION", "staff")
+
+    if perm in (None, "", "public", "none"):
+        return None
+
+    if callable(perm) or (isinstance(perm, str) and "." in perm):
+        check = perm if callable(perm) else import_string(perm)
+        if check(request):
+            return None
+        return JsonResponse({"error": "Permission denied."}, status=403)
+
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return JsonResponse({"error": "Authentication required."}, status=401)
+
+    if perm == "staff" and not user.is_staff:
+        return JsonResponse({"error": "Staff access required."}, status=403)
+
+    return None
+
+
+class _GuardedView:
+    """
+    Wraps a built-in API view with the configured permission and CSRF policy.
+
+    Implemented as a callable object rather than a decorator so `csrf_exempt`
+    can be a property: CsrfViewMiddleware reads that attribute off the URL
+    callback, and a plain `functools.wraps` chain copies `__dict__` — which is
+    how a `csrf_exempt = True` flag silently propagates out through every later
+    decorator layer and disables CSRF even under `csrf_protect`.
+    """
+
+    def __init__(self, view):
+        self.view = view
+        # updated=() so the wrapped view's __dict__ (and any csrf_exempt flag
+        # on it) is not copied onto this wrapper.
+        functools.update_wrapper(self, view, updated=())
+
+    @property
+    def csrf_exempt(self) -> bool:
+        return bool(getattr(agent_settings, "API_CSRF_EXEMPT", False))
+
+    def __call__(self, request, *args, **kwargs):
+        denied = _permission_denied(request)
+        if denied is not None:
+            return denied
+        view = self.view
+        if not self.csrf_exempt:
+            # Explicit, so CSRF is enforced even in projects that omit
+            # CsrfViewMiddleware from MIDDLEWARE.
+            view = csrf_protect(view)
+        return view(request, *args, **kwargs)
+
+
+def guarded_api(view):
+    """Applies the configured permission + CSRF policy to a built-in API view."""
+    return _GuardedView(view)
+
+
+def _is_staff(request) -> bool:
+    user = getattr(request, "user", None)
+    return bool(user is not None and user.is_authenticated and user.is_staff)
+
+
+def _thread_access_denied(request, thread_id: str):
+    """
+    Returns a 403 JsonResponse when a non-staff caller targets a persisted
+    thread belonging to another user, else None.
+
+    Only enforceable when PERSIST_MESSAGES is on — without a ChatThread row
+    there is no record of who owns a thread id.
+    """
+    if _is_staff(request):
+        return None
+    user = getattr(request, "user", None)
+    if user is None or not user.is_authenticated:
+        return None
+
+    from .models import ChatThread
+    thread = ChatThread.objects.filter(thread_id=thread_id).only("user_id").first()
+    if thread is not None and thread.user_id is not None and thread.user_id != user.pk:
+        return JsonResponse({"error": "Thread not found."}, status=403)
+    return None
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Agent Instance Cache
@@ -77,11 +176,16 @@ def _resolve_agent(agent_name: str):
 def _get_user_id(request, body: dict) -> int | None:
     """
     Resolves user_id from the request.
-    Uses request.user if authenticated, else falls back to body["user_id"].
+
+    Uses request.user when authenticated. The body["user_id"] fallback lets an
+    unauthenticated caller pick any user id, so it is opt-in via
+    DJANGO_LANGGRAPH_AGENT["TRUST_BODY_USER_ID"].
     """
     if hasattr(request, "user") and request.user.is_authenticated:
         return request.user.pk
-    return body.get("user_id")
+    if getattr(agent_settings, "TRUST_BODY_USER_ID", False):
+        return body.get("user_id")
+    return None
 
 
 def _persist_message(agent_config, thread_id: str, text: str, is_user: bool, model_name: str = "", user_id=None):
@@ -184,7 +288,7 @@ def admin_chat_view(request):
 # Chat Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
-@csrf_exempt
+@guarded_api
 @require_http_methods(["POST"])
 def chat_view(request):
     try:
@@ -202,6 +306,10 @@ def chat_view(request):
         return JsonResponse({"error": "'message' is required."}, status=400)
     if not thread_id:
         return JsonResponse({"error": "'thread_id' is required."}, status=400)
+
+    denied = _thread_access_denied(request, thread_id)
+    if denied is not None:
+        return denied
 
     agent_config, err = _resolve_agent(agent_name)
     if err:
@@ -247,7 +355,7 @@ def chat_view(request):
 # Approval Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
-@csrf_exempt
+@guarded_api
 @require_http_methods(["POST"])
 def approve_view(request):
     try:
@@ -265,6 +373,10 @@ def approve_view(request):
         return JsonResponse({"error": "'thread_id' is required."}, status=400)
     if not isinstance(decisions, dict):
         return JsonResponse({"error": "'decisions' must be an object."}, status=400)
+
+    denied = _thread_access_denied(request, thread_id)
+    if denied is not None:
+        return denied
 
     agent_config, err = _resolve_agent(agent_name)
     if err:
@@ -303,7 +415,7 @@ def approve_view(request):
 # Delete Thread Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
-@csrf_exempt
+@guarded_api
 @require_http_methods(["POST", "DELETE"])
 def delete_thread_view(request):
     """
@@ -320,6 +432,10 @@ def delete_thread_view(request):
     if not thread_id:
         return JsonResponse({"error": "'thread_id' is required."}, status=400)
 
+    denied = _thread_access_denied(request, thread_id)
+    if denied is not None:
+        return denied
+
     from .models import ChatThread
     deleted_count, _ = ChatThread.objects.filter(thread_id=thread_id).delete()
 
@@ -334,6 +450,7 @@ def delete_thread_view(request):
 # Threads API (used by agent switcher — no page reload)
 # ──────────────────────────────────────────────────────────────────────────────
 
+@guarded_api
 @require_http_methods(["GET"])
 def get_threads_view(request):
     """
@@ -358,8 +475,14 @@ def get_threads_view(request):
     if not persist:
         return JsonResponse({"threads": [], "persist": False})
 
+    thread_qs = ChatThread.objects.filter(agent=agent_config)
+    if not _is_staff(request):
+        user = getattr(request, "user", None)
+        user_pk = user.pk if (user is not None and user.is_authenticated) else None
+        thread_qs = thread_qs.filter(user_id=user_pk)
+
     threads = []
-    for t in ChatThread.objects.filter(agent=agent_config).order_by("-updated_at")[:30]:
+    for t in thread_qs.order_by("-updated_at")[:30]:
         first_msg = ChatMessage.objects.filter(thread=t, is_user=True).order_by("created_at").first()
         title = (first_msg.text[:35] + "\u2026") if first_msg else t.thread_id
         threads.append({
@@ -455,6 +578,7 @@ admin_chat_view = chat_page_view
 # Agent Discovery Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
 
+@guarded_api
 @require_http_methods(["GET"])
 def list_agents_view(request):
     from .models import AgentConfig

@@ -120,6 +120,87 @@ Navigate to `/admin/django_langgraph_agent/agentconfig/add/`:
 
 ---
 
+## Securing the API Endpoints
+
+The endpoints exposed by `include("django_langgraph_agent.urls")` drive the ORM
+tools — they can read, create and update every whitelisted model — so they are
+**protected by default**: staff only, CSRF enforced, and no client-supplied
+`user_id`.
+
+```python
+DJANGO_LANGGRAPH_AGENT = {
+    # "staff" (default) | "authenticated" | "public" | "myapp.perms.can_chat"
+    "API_PERMISSION": "staff",
+
+    # CSRF stays on; the bundled chat template already sends X-CSRFToken.
+    "API_CSRF_EXEMPT": False,
+
+    # Let an *unauthenticated* caller pick a user id via the request body.
+    # Off by default — it allows impersonating any user.
+    "TRUST_BODY_USER_ID": False,
+}
+```
+
+A dotted path (or a callable) receives the request and returns a bool:
+
+```python
+# myapp/perms.py
+def can_chat(request):
+    return request.user.is_authenticated and request.user.has_perm("myapp.use_agent")
+```
+
+Anonymous callers get `401`, authenticated-but-unauthorised callers get `403`.
+When `PERSIST_MESSAGES` is on, non-staff callers are additionally confined to
+their own threads — they cannot read, post into, or delete someone else's
+`thread_id`.
+
+---
+
+## Row-Level Scoping (Multi-Tenancy)
+
+`MODEL_WHITELIST`, `allowed_models` and `blocked_fields` control **which models
+and fields** are reachable. `QUERYSET_SCOPE` controls **which rows** — the hook
+every read and update is filtered through. Telling the agent in its system
+prompt to "always filter by organization" is not a control; it is a suggestion
+the model can drop.
+
+```python
+def scope_to_organization(model, config):
+    """model: the Django model. config: the LangGraph RunnableConfig."""
+    user_id = config.get("configurable", {}).get("user_id")
+    if not hasattr(model, "organization"):
+        return None                      # leave this model unscoped
+    if not user_id:
+        return model.objects.none()      # deny outright
+    org_id = User.objects.get(pk=user_id).organization_id
+    return {"organization_id": org_id}   # a dict of filters, or a QuerySet
+
+
+def organization_defaults(model, config):
+    """Field values forced onto every add_record / update_record write."""
+    user_id = config.get("configurable", {}).get("user_id")
+    if not user_id or not hasattr(model, "organization"):
+        return {}
+    return {"organization_id": User.objects.get(pk=user_id).organization_id}
+
+
+DJANGO_LANGGRAPH_AGENT = {
+    "QUERYSET_SCOPE": scope_to_organization,   # or "myapp.scopes.scope_to_organization"
+    "WRITE_DEFAULTS": organization_defaults,
+}
+```
+
+- `QUERYSET_SCOPE` returns a `QuerySet`, a dict of filter kwargs, or `None` to
+  leave that model unscoped. Return `model.objects.none()` to deny access.
+  It becomes the base queryset for `query_records`, `aggregate_model_records`
+  and the lookup in `update_record`, so an out-of-scope row cannot be read or
+  written.
+- `WRITE_DEFAULTS` values are authoritative — they override anything the model
+  supplied — and are applied *after* field validation, so concrete `<fk>_id`
+  keys work even when the `fields` allowlist only lists `<fk>`.
+
+---
+
 ## Adding Custom Tools (`@register_tool`)
 
 To add external integrations (push notifications, emails, third-party APIs):
@@ -205,6 +286,9 @@ UNFOLD = {
 ---
 
 ## API Endpoints Reference
+
+> 🔒 Every endpoint below is guarded by `API_PERMISSION` (staff-only by default)
+> and expects a CSRF token on POST — see [Securing the API Endpoints](#securing-the-api-endpoints).
 
 ### 1. List Agents (`GET /api/agent/`)
 Returns active agents available for chat.

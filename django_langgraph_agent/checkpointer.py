@@ -23,6 +23,7 @@ can share a Django project without their states colliding.
 # ─────────────────────────────────────────────────────────────────────────────
 """
 
+import atexit
 import logging
 
 from django.conf import settings
@@ -31,6 +32,25 @@ logger = logging.getLogger(__name__)
 
 # Registry: agent_name → checkpointer instance
 _checkpointer_registry: dict = {}
+
+# Connection pools we opened, closed at interpreter shutdown. Without this,
+# psycopg-pool's worker threads outlive the process and log
+# "couldn't stop thread 'pool-1-worker-0' within 5.0 seconds".
+_open_pools: list = []
+
+
+def close_checkpointers() -> None:
+    """Closes every connection pool this module opened. Registered via atexit."""
+    while _open_pools:
+        pool = _open_pools.pop()
+        try:
+            pool.close()
+        except Exception as exc:      # pragma: no cover - shutdown best effort
+            logger.debug("Error closing LangGraph connection pool: %s", exc)
+    _checkpointer_registry.clear()
+
+
+atexit.register(close_checkpointers)
 
 
 def get_checkpointer(agent_name: str = "default"):
@@ -81,9 +101,14 @@ def get_checkpointer(agent_name: str = "default"):
             f"host={host} port={port} dbname={name} "
             f"user={user} password={password} connect_timeout=10"
         )
-        pool = _NullPool(conninfo=conninfo, open=True)
+        # autocommit is required: PostgresSaver.setup() issues
+        # CREATE INDEX CONCURRENTLY, which PostgreSQL refuses inside a
+        # transaction block. It is also the right mode for this pool anyway —
+        # LangGraph manages its own transaction per checkpoint operation.
+        pool = _NullPool(conninfo=conninfo, open=True, kwargs={"autocommit": True})
         checkpointer = PostgresSaver(pool)
-        logger.info("LangGraph checkpointer [%s]: PostgreSQL NullPool", agent_name)
+        _open_pools.append(pool)
+        logger.info("LangGraph checkpointer [%s]: PostgreSQL NullPool (autocommit)", agent_name)
 
     else:
         from langgraph.checkpoint.memory import MemorySaver
