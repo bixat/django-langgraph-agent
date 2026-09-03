@@ -154,6 +154,23 @@ When `PERSIST_MESSAGES` is on, non-staff callers are additionally confined to
 their own threads — they cannot read, post into, or delete someone else's
 `thread_id`.
 
+> **Upgrading from 0.1.x.** Two things change.
+>
+> 1. **The endpoints are no longer anonymous.** Callers now need a staff
+>    session, a matching `API_PERMISSION`, or an explicit `"public"`, plus a
+>    CSRF token on POST. The bundled chat UI already sends one.
+> 2. **Threads created before the upgrade have no owner.** Ownership is
+>    recorded per thread, and 0.1.x had no authenticated caller to record, so
+>    those rows have `user_id = NULL`. An unowned thread is treated as
+>    unclaimed: under `API_PERMISSION: "authenticated"` any logged-in user can
+>    open or delete one. Threads created after the upgrade are owned by their
+>    creator and are private. If the old transcripts matter, assign them before
+>    relaxing the permission:
+>
+>    ```python
+>    ChatThread.objects.filter(user__isnull=True).delete()   # or .update(user=owner)
+>    ```
+
 ---
 
 ## Row-Level Scoping (Multi-Tenancy)
