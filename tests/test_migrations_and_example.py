@@ -180,3 +180,39 @@ def test_meta_row_can_shrink_inside_the_bubble(chat_template_source):
     badge = badge[: badge.index("}")]
     assert "min-width: 0" in badge
     assert "overflow-wrap: anywhere" in badge
+
+
+@pytest.mark.django_db
+def test_rendered_chat_page_carries_the_scroll_and_overflow_fixes(client, django_user_model):
+    """End-to-end: the fixes must survive into the page the admin actually serves,
+    not just live in the template source."""
+    from django_langgraph_agent.models import AgentConfig
+
+    AgentConfig.objects.create(
+        name="render_smoke", display_name="Render Smoke", system_prompt="hi", is_active=True
+    )
+    superuser = django_user_model.objects.create_superuser("render_root", "r@e.com", "pw")
+    client.force_login(superuser)
+
+    resp = client.get("/admin/ai-chat/?agent=render_smoke")
+    assert resp.status_code == 200
+    html = resp.content.decode()
+
+    assert "function scrollToBottom(" in html
+    assert "stickToBottom" in html
+    assert "overflow-wrap: anywhere" in html
+    assert html.count("chatbox.scrollTop = chatbox.scrollHeight;") == 1
+
+
+@pytest.mark.django_db
+def test_agentconfig_admin_form_renders_the_model_autocomplete(client, django_user_model):
+    """The choice list is embedded as JSON into help_text — guard the rewrite."""
+    superuser = django_user_model.objects.create_superuser("form_root", "f@e.com", "pw")
+    client.force_login(superuser)
+
+    resp = client.get("/admin/django_langgraph_agent/agentconfig/add/")
+    assert resp.status_code == 200
+    html = resp.content.decode()
+
+    assert "initAutocomplete" in html
+    assert "store.Product" in html
