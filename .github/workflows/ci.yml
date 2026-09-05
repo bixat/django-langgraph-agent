@@ -1,24 +1,28 @@
-name: Publish to PyPI
+name: CI
 
 on:
-  release:
-    types: [published]
+  pull_request:
+  push:
+    branches: [master]
 
 permissions:
   contents: read
 
 jobs:
-  # A release must not be able to reach PyPI without the suite and the migration
-  # check passing first. 0.1.3 shipped a model/migration drift (#5) that no gate
-  # would have let through.
-  verify:
+  test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install
@@ -32,6 +36,9 @@ jobs:
         env:
           PYTHONPATH: ${{ github.workspace }}
 
+      # Guards issue #5: a help_text edit on a documented field silently drifts
+      # the model from its migration, and downstream projects cannot fix it —
+      # the generated migration lands in site-packages and is lost on reinstall.
       - name: No missing migrations
         run: python manage.py makemigrations --check --dry-run
         working-directory: example_project
@@ -44,32 +51,18 @@ jobs:
       - name: Tests
         run: python -m pytest -q
 
-  deploy:
-    needs: verify
+  build:
     runs-on: ubuntu-latest
-    environment:
-      name: pypi
-      url: https://pypi.org/p/django-langgraph-agent
-    permissions:
-      id-token: write # Required for PyPI Trusted Publishing
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
+          cache: pip
 
-      - name: Install build dependencies
+      - name: Build the distribution
         run: |
-          python -m pip install --upgrade pip
-          pip install build
-
-      - name: Build package
-        run: python -m build
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*

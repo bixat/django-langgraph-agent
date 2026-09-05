@@ -71,7 +71,13 @@ def get_checkpointer(agent_name: str = "default"):
     if "sqlite" in engine:
         import sqlite3
 
-        from langgraph.checkpoint.sqlite import SqliteSaver
+        try:
+            from langgraph.checkpoint.sqlite import SqliteSaver
+        except ImportError as exc:      # pragma: no cover - declared as a dependency
+            raise ImportError(
+                "The SQLite checkpointer requires langgraph-checkpoint-sqlite. "
+                "Install with: pip install langgraph-checkpoint-sqlite"
+            ) from exc
 
         db_path = str(db_settings["NAME"])
         conn = sqlite3.connect(db_path, check_same_thread=False)

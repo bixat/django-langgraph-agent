@@ -9,3 +9,20 @@ django_langgraph_agent/tools/__pycache__/
 django_langgraph_agent/management/commands/__pycache__/
 django_langgraph_agent/management/__pycache__/
 example_project/.env
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Local development database
+example_project/db.sqlite3
+example_project/db.sqlite3-shm
+example_project/db.sqlite3-wal
+
+# Tooling caches
+.pytest_cache/
+.coverage
+htmlcov/
+venv/
+.venv/

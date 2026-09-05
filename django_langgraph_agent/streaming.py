@@ -31,7 +31,22 @@ logger = logging.getLogger(__name__)
 
 def _sse(event: str, data: dict) -> str:
     """Format a dictionary into a Server-Sent Event string."""
-    return f"event: {event}\ndata: {json.dumps(data)}\n\n"
+    # default=str for the same reason _serialize_qs coerces field values: an
+    # approval payload carries the model's raw tool-call args, and one value
+    # json.dumps cannot handle would otherwise abort the whole turn.
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+
+
+def _error_event(exc: Exception, context: str) -> str:
+    """
+    Logs the real exception and emits a generic message to the client.
+
+    The exception text can carry connection strings, SQL and file paths, and
+    these endpoints are reachable by non-staff callers whenever API_PERMISSION
+    is relaxed from its default.
+    """
+    logger.exception("Error in %s: %s", context, exc)
+    return _sse("error", {"message": "The agent could not complete this request."})
 
 
 def stream_agent(
@@ -123,8 +138,7 @@ def stream_agent(
             on_done(full_ai_message, {"model_name": detected_model_name})
 
     except Exception as exc:
-        logger.exception("Error in stream_agent: %s", exc)
-        yield _sse("error", {"message": str(exc)})
+        yield _error_event(exc, "stream_agent")
 
 
 def stream_approval_resume(
@@ -246,8 +260,7 @@ def stream_approval_resume(
             on_done(full_ai_message, {"model_name": detected_model_name})
 
     except Exception as exc:
-        logger.exception("Error in resume_agent: %s", exc)
-        yield _sse("error", {"message": str(exc)})
+        yield _error_event(exc, "resume_agent")
 
 
 resume_agent = stream_approval_resume
